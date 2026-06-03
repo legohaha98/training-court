@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+  <title>TRAINING COURT · 宝可梦 TCG 战绩</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Training Court" />
+  <meta name="theme-color" content="#1d2233" />
+</head>
+<body>
+  <div id="app">
+    <div class="phone">
+      <header class="topbar">
+        <img class="logo" src="assets/pokeball.svg" alt="" />
+        <span class="brand">TRAINING COURT<br><small>宝可梦 TCG 战绩</small></span>
+      </header>
+
+      <main class="content" id="main"></main>
+
+      <nav class="tabbar">
+        <a data-route="tournaments" href="#/tournaments">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 21h8M12 17v4"/><line x1="8" y1="21" x2="16" y2="21"/>
+            <path d="M7 4H4a2 2 0 0 0-2 2v1c0 2.8 1.8 5.1 4.3 6"/>
+            <path d="M17 4h3a2 2 0 0 1 2 2v1c0 2.8-1.8 5.1-4.3 6"/>
+            <path d="M7 4c0 5.5 2.7 9 5 10 2.3-1 5-4.5 5-10H7z"/>
+          </svg>锦标赛
+        </a>
+        <a data-route="stats" href="#/stats">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="12" width="4" height="9" rx="1"/>
+            <rect x="10" y="7" width="4" height="14" rx="1"/>
+            <rect x="17" y="3" width="4" height="18" rx="1"/>
+          </svg>数据
+        </a>
+      </nav>
+    </div>
+  </div>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(function () {});
+    }
+  </script>
+  <script src="js/pokemon.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

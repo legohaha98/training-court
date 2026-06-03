@@ -1,0 +1,13 @@
+{
+  "name": "TRAINING COURT",
+  "short_name": "Training Court",
+  "description": "宝可梦 TCG 战绩记录",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f5f8",
+  "theme_color": "#1d2233",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
