@@ -40,9 +40,9 @@
     main.appendChild(el("p", { class: "page-sub" }, ["记录你的 TCG 锦标赛、每轮对局与对位"]));
     main.appendChild(el("div", { class: "list-actions" }, [
       el("button", { class: "btn btn-primary", style: "flex:1", onclick: function () { openTournamentModal(null); } }, ["＋  新建锦标赛"]),
-      el("button", { class: "btn btn-ghost import-btn", title: "导入锦标赛",
+      el("button", { class: "tool import-btn", title: "导入锦标赛",
         onclick: openImportModal },
-        [el("img", { src: "assets/icon-import.svg", alt: "" }), "导入"])
+        [el("img", { src: "assets/icon-import.svg", alt: "" })])
     ]));
 
     var catSel = el("select", { class: "select", onchange: function () { listFilters.category = this.value; renderList(); } },
