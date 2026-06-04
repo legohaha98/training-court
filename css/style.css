@@ -128,6 +128,7 @@ img { image-rendering: pixelated; }
 .import-btn:active { background: #f3f4f8; }
 .import-btn img { width: 18px; height: 18px; display: block;
   object-fit: contain; image-rendering: auto; }
+.tool-svg { width: 18px; height: 18px; display: block; stroke: #5b6172; }
 
 /* ---- detail ---- */
 .detail-tools { display: flex; gap: 8px; flex: 0 0 auto; }

@@ -41,8 +41,14 @@
     main.appendChild(el("div", { class: "list-actions" }, [
       el("button", { class: "btn btn-primary", style: "flex:1", onclick: function () { openTournamentModal(null); } }, ["＋  新建锦标赛"]),
       el("button", { class: "tool import-btn", title: "导入锦标赛",
-        onclick: openImportModal },
-        [el("img", { src: "assets/icon-import.svg", alt: "" })])
+        onclick: openImportModal }, [
+        el("svg", { class: "tool-svg", viewBox: "0 0 24 24", fill: "none",
+          stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
+          el("path", { d: "M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" }),
+          el("polyline", { points: "8 12 12 16 16 12" }),
+          el("line", { x1: "12", y1: "5", x2: "12", y2: "16" })
+        ])
+      ])
     ]));
 
     var catSel = el("select", { class: "select", onchange: function () { listFilters.category = this.value; renderList(); } },
