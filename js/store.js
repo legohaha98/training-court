@@ -4,11 +4,33 @@
   var KEY_T = "tc.tournaments";
   var KEY_B = "tc.battlelogs";
 
+  // ── storage health check ──────────────────────────────────────────────────
+  // Returns true if localStorage is writable (false in iOS Private Mode, some
+  // WebViews, or when the user has blocked site data).
+  function checkStorage() {
+    try {
+      localStorage.setItem("_tc_probe", "1");
+      var ok = localStorage.getItem("_tc_probe") === "1";
+      localStorage.removeItem("_tc_probe");
+      return ok;
+    } catch (e) { return false; }
+  }
+  var STORAGE_OK = checkStorage();
+
   function read(key) {
+    if (!STORAGE_OK) return [];
     try { return JSON.parse(localStorage.getItem(key)) || []; }
     catch (e) { return []; }
   }
-  function write(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+  function write(key, val) {
+    if (!STORAGE_OK) return;
+    try { localStorage.setItem(key, JSON.stringify(val)); }
+    catch (e) {
+      // QuotaExceededError or SecurityError – mark storage as broken
+      STORAGE_OK = false;
+      if (window._onStorageFail) window._onStorageFail();
+    }
+  }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   // ---- Tournaments ----
@@ -176,12 +198,85 @@
     return s;
   }
 
+  /*
+   * Compact export format v1 — an array tuned for minimum characters:
+   * [ver, name, date, catIdx, format, placeIdx, [deckIds], [rounds]]
+   * round: [opp1Id, opp2Id, result(0=W,1=L), order(0=?,1=先,2=后), special(0=none,1=BYE,2=NOSHOW)]
+   * Pokémon IDs are plain integers; 0 = slot empty.
+   * The array is JSON-stringified then UTF-8-safe Base64 encoded.
+   * Keeping field names out of the payload saves ~60% vs raw JSON.
+   */
+  var EXP_CATS   = ["", "店赛", "城市赛", "超级赛", "高级赛", "大师赛", "世界赛", "线上对战", "其他"];
+  var EXP_PLACES = ["", "冠军", "亚军", "四强", "八强", "十六强", "三十二强", "六十四强"];
+
+  function _b64enc(str) {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (_, p) {
+      return String.fromCharCode(parseInt(p, 16));
+    }));
+  }
+  function _b64dec(b64) {
+    return decodeURIComponent(Array.prototype.map.call(atob(b64), function (c) {
+      return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(""));
+  }
+
+  function exportTournament(t) {
+    var ci = EXP_CATS.indexOf(t.category || ""); if (ci < 0) ci = 0;
+    var pi = EXP_PLACES.indexOf(t.placement || ""); if (pi < 0) pi = 0;
+    var compact = [
+      1,                        // format version
+      t.name,                   // string
+      t.date,                   // "YYYY-MM-DD"
+      ci,                       // category index
+      t.format || "",           // string
+      pi,                       // placement index
+      t.deck || [],             // [id, id?]
+      (t.rounds || []).map(function (r) {
+        return [
+          (r.opponentDeck || [])[0] || 0,
+          (r.opponentDeck || [])[1] || 0,
+          r.result === "W" ? 0 : 1,
+          r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
+          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0
+        ];
+      })
+    ];
+    return _b64enc(JSON.stringify(compact));
+  }
+
+  function importTournament(code) {
+    try {
+      var compact = JSON.parse(_b64dec(code.trim()));
+      if (!Array.isArray(compact) || compact[0] !== 1) return null;
+      return {
+        name: compact[1] || "Imported",
+        date: compact[2] || new Date().toISOString().slice(0, 10),
+        category: EXP_CATS[compact[3]] || "",
+        format: compact[4] || "",
+        placement: EXP_PLACES[compact[5]] || "",
+        deck: compact[6] || [],
+        rounds: (compact[7] || []).map(function (r, i) {
+          return {
+            id: uid(),
+            number: i + 1,
+            opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
+            result: r[2] === 0 ? "W" : "L",
+            wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
+            special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : ""
+          };
+        })
+      };
+    } catch (e) { return null; }
+  }
+
   window.Store = {
     loadTournaments: loadTournaments, saveTournaments: saveTournaments,
     getTournament: getTournament, addTournament: addTournament,
     updateTournament: updateTournament, deleteTournament: deleteTournament,
     addRound: addRound, deleteRound: deleteRound, updateRound: updateRound,
     loadLogs: loadLogs, addLog: addLog, deleteLog: deleteLog,
-    computeRecord: computeRecord, computeStats: computeStats
+    computeRecord: computeRecord, computeStats: computeStats,
+    exportTournament: exportTournament, importTournament: importTournament,
+    isStorageOk: function () { return STORAGE_OK; }
   };
 })();

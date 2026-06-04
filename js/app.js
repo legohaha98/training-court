@@ -38,7 +38,12 @@
     main.innerHTML = "";
     main.appendChild(el("div", { class: "page-title" }, ["锦标赛"]));
     main.appendChild(el("p", { class: "page-sub" }, ["记录你的 TCG 锦标赛、每轮对局与对位"]));
-    main.appendChild(el("button", { class: "btn btn-primary", onclick: function () { openTournamentModal(null); } }, ["＋  新建锦标赛"]));
+    main.appendChild(el("div", { class: "list-actions" }, [
+      el("button", { class: "btn btn-primary", style: "flex:1", onclick: function () { openTournamentModal(null); } }, ["＋  新建锦标赛"]),
+      el("button", { class: "btn btn-ghost import-btn", title: "导入锦标赛",
+        onclick: openImportModal },
+        [el("img", { src: "assets/icon-import.svg", alt: "" }), "导入"])
+    ]));
 
     var catSel = el("select", { class: "select", onchange: function () { listFilters.category = this.value; renderList(); } },
       [el("option", { value: "" }, ["全部分类"])].concat(CATEGORIES.map(function (c) {
@@ -155,6 +160,8 @@
         el("img", { src: "assets/icon-back.svg", alt: "" }), "返回"
       ]),
       el("div", { class: "detail-tools" }, [
+        el("button", { class: "tool", "aria-label": "导出", title: "导出锦标赛", onclick: function () { openExportModal(t); } },
+          [el("img", { src: "assets/icon-export.svg", alt: "" })]),
         el("button", { class: "tool", "aria-label": "编辑锦标赛", title: "编辑锦标赛", onclick: function () { openTournamentModal(t); } },
           [el("img", { src: "assets/icon-edit.svg", alt: "" })]),
         el("button", { class: "tool", "aria-label": "删除锦标赛", title: "删除锦标赛", onclick: function () {
@@ -356,6 +363,82 @@
     main.appendChild(section("对位统计（对手卡组）", s.matchups));
   }
 
+  // ---------------------------------------------------------------- EXPORT / IMPORT
+  function openExportModal(t) {
+    var code = S.exportTournament(t);
+    var ta = el("textarea", {
+      class: "export-code", readonly: "readonly",
+      style: "width:100%;height:110px;resize:none;font-family:monospace;font-size:12px;" +
+             "border:1px solid var(--line);border-radius:10px;padding:10px;background:#f4f5f8;"
+    });
+    ta.value = code;
+
+    var copyBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      navigator.clipboard ? navigator.clipboard.writeText(code).then(function () {
+        copyBtn.textContent = "已复制 ✓";
+        setTimeout(function () { copyBtn.textContent = "复制代码"; }, 2000);
+      }) : (ta.select(), document.execCommand("copy"), copyBtn.textContent = "已复制 ✓");
+    } }, ["复制代码"]);
+
+    var byteLen = new TextEncoder().encode(code).length;
+    showOverlay(el("div", { class: "modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["导出锦标赛"]),
+      el("p", { style: "color:var(--muted);font-size:13px;margin:0 0 10px" }, [
+        t.name + " · " + (t.rounds || []).length + " 轮 · " + byteLen + " 字节"
+      ]),
+      el("div", { class: "field" }, [ta]),
+      el("p", { style: "color:var(--muted);font-size:12px;margin:4px 0 12px" }, [
+        "复制后可保存到备忘录、微信等任何地方，需要时粘贴导入还原。"
+      ]),
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost", onclick: closeOverlay }, ["关闭"]),
+        copyBtn
+      ])
+    ]));
+    // auto-select for easy copy
+    setTimeout(function () { ta.select(); }, 100);
+  }
+
+  function openImportModal() {
+    var ta = el("textarea", {
+      class: "export-code",
+      placeholder: "粘贴导出的代码…",
+      style: "width:100%;height:110px;resize:none;font-family:monospace;font-size:12px;" +
+             "border:1px solid var(--line);border-radius:10px;padding:10px;background:#f4f5f8;"
+    });
+    var errMsg = el("p", { style: "color:var(--loss-ink);font-size:13px;margin:6px 0 0;display:none" },
+      ["代码无效，请检查是否复制完整。"]);
+
+    var importBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      var data = S.importTournament(ta.value);
+      if (!data) { errMsg.style.display = "block"; return; }
+      var t = S.addTournament(data);
+      // addRound re-assigns number + id so pass stripped round data
+      (data.rounds || []).forEach(function (r) {
+        S.addRound(t.id, { result: r.result, wentFirst: r.wentFirst, special: r.special,
+          opponentDeck: r.opponentDeck });
+      });
+      closeOverlay();
+      location.hash = "#/t/" + t.id;
+    } }, ["导入"]);
+
+    showOverlay(el("div", { class: "modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["导入锦标赛"]),
+      el("p", { style: "color:var(--muted);font-size:13px;margin:0 0 10px" }, [
+        "将之前导出的代码粘贴到下方，点击导入还原锦标赛。"
+      ]),
+      el("div", { class: "field" }, [ta]),
+      errMsg,
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost", onclick: closeOverlay }, ["取消"]),
+        importBtn
+      ])
+    ]));
+    setTimeout(function () { ta.focus(); }, 100);
+  }
+
   // ---------------------------------------------------------------- OVERLAY
   function showOverlay(node) {
     var ov = el("div", { class: "overlay", onclick: function (e) { if (e.target === ov) closeOverlay(); } }, [node]);
@@ -378,9 +461,34 @@
     else { setActiveNav("tournaments"); renderList(); }
   }
 
+  // ── storage health banner ────────────────────────────────────────────────
+  // Detect Private Mode / WebView / blocked storage and warn the user.
+  function showStorageWarning() {
+    var phone = document.querySelector(".phone");
+    if (!phone || document.getElementById("sw-warn")) return;
+    var isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    var msg = isWeChat
+      ? "你在微信内打开了此页面。微信浏览器不会保存数据，请点击右上角「⋯」→「在浏览器中打开」，用 Safari 打开后再使用。"
+      : "检测到数据无法保存（可能开启了无痕浏览）。请关闭私密模式，用普通 Safari 打开此页面，数据才能正常记录。";
+    var banner = el("div", { class: "storage-warn", id: "sw-warn" }, [
+      el("span", { class: "sw-icon" }, ["⚠️"]),
+      el("div", { class: "sw-text" }, [
+        el("strong", {}, ["数据无法保存！"]),
+        msg
+      ])
+    ]);
+    // insert before the content area
+    var content = document.getElementById("main");
+    phone.insertBefore(banner, content);
+  }
+
+  window._onStorageFail = showStorageWarning;
+
   window.addEventListener("hashchange", router);
   window.addEventListener("DOMContentLoaded", function () {
     main = document.getElementById("main");
+    // check immediately on load
+    if (!S.isStorageOk()) showStorageWarning();
     router();
   });
 })();

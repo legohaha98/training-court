@@ -120,6 +120,10 @@ img { image-rendering: pixelated; }
 .t-record .rec { font-weight: 800; font-size: 18px; }
 .t-record .place { color: var(--accent); font-size: 12px; margin-top: 3px; font-weight: 600; }
 .empty { color: var(--muted); text-align: center; padding: 56px 16px; font-size: 14px; }
+.list-actions { display: flex; gap: 10px; align-items: stretch; }
+.import-btn { display: flex; align-items: center; gap: 6px; font-size: 14px;
+  padding: 12px 16px; white-space: nowrap; }
+.import-btn img { width: 18px; height: 18px; image-rendering: auto; }
 
 /* ---- detail ---- */
 .detail-tools { display: flex; gap: 8px; }
@@ -267,6 +271,15 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .modal .grip { width: 40px; height: 4px; border-radius: 99px; background: #e1e4ec; margin: -6px auto 14px; }
 .modal h2 { margin: 0 0 16px; font-size: 21px; }
 .field { margin-bottom: 11px; }
+
+/* ---- storage warning banner ---- */
+.storage-warn {
+  background: #fff3cd; border-bottom: 1px solid #f0c040;
+  padding: 12px var(--gut); display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; line-height: 1.5; color: #7a5c00;
+}
+.storage-warn .sw-icon { font-size: 18px; flex: 0 0 auto; margin-top: 1px; }
+.storage-warn .sw-text strong { display: block; font-weight: 700; margin-bottom: 2px; }
 
 /* ---- stats ---- */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }
