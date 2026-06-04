@@ -54,7 +54,8 @@ img { image-rendering: pixelated; }
 .topbar {
   position: sticky; top: 0; z-index: 30;
   display: flex; align-items: center; gap: 9px;
-  padding: 16px var(--gut) 13px;
+  /* env(safe-area-inset-top) pushes content below Dynamic Island / status bar */
+  padding: calc(16px + env(safe-area-inset-top)) var(--gut) 13px;
   background: rgba(244, 245, 248, .86);
   backdrop-filter: saturate(160%) blur(12px);
   border-bottom: 1px solid var(--line);
@@ -126,12 +127,13 @@ img { image-rendering: pixelated; }
 .import-btn img { width: 18px; height: 18px; image-rendering: auto; }
 
 /* ---- detail ---- */
-.detail-tools { display: flex; gap: 8px; }
-.detail-tools .tool { width: 40px; height: 40px; border-radius: 12px; background: #fff;
-  border: 1px solid var(--line); display: grid; place-items: center; cursor: pointer;
-  padding: 0; box-shadow: var(--shadow); }
+.detail-tools { display: flex; gap: 8px; flex: 0 0 auto; }
+.detail-tools .tool { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 12px;
+  background: #fff; border: 1px solid var(--line); display: grid; place-items: center;
+  cursor: pointer; padding: 0; box-shadow: var(--shadow); overflow: hidden; }
 .detail-tools .tool:active { background: #f3f4f8; }
-.detail-tools .tool img { width: 19px; height: 19px; }
+.detail-tools .tool img { width: 18px; height: 18px; display: block;
+  object-fit: contain; image-rendering: auto; }
 .detail-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
 .detail-head .left { flex: 1; min-width: 0; }
 .detail-head h1 { margin: 0; font-size: 25px; font-weight: 800; }
