@@ -116,7 +116,7 @@
         if (freqWrap) freqWrap.style.display = q ? "none" : "";
         listEl.innerHTML = "";
         (window.POKEMON || []).filter(function (p) {
-          return p.name.toLowerCase().indexOf(q) !== -1;
+          return p.name.toLowerCase().indexOf(q) !== -1 || (p.nameZh && p.nameZh.indexOf(q) !== -1);
         }).forEach(function (p) {
           var row = el("div", { class: "picker-sheet-opt" + (p.id === value ? " active" : "") }, [
             sprite(p.id),
