@@ -189,8 +189,13 @@ img { image-rendering: pixelated; }
 .decklist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px; }
 .decklist-card { position: relative; border-radius: 10px; overflow: hidden; background: #eceef4;
   box-shadow: var(--shadow); }
+/* No padding here — the art box's aspect-ratio must exactly match a real
+   card image's shape so the <img> (width/height:100%) fills it cleanly.
+   A padded container used to shrink the ratio away from ~5:7, which with
+   object-fit:cover cropped a visible strip off both sides. The text-only
+   placeholder gets its own padding on .decklist-card-name instead. */
 .decklist-card-art { aspect-ratio: 5 / 7; display: flex; align-items: center; justify-content: center;
-  padding: 6px; text-align: center; }
+  text-align: center; }
 /* shimmer while a card image is still loading, so the wait reads as
    "loading" rather than "broken" — stops once .has-img is added */
 .decklist-card:not(.has-img) .decklist-card-art {
@@ -198,8 +203,8 @@ img { image-rendering: pixelated; }
   background-size: 200% 100%; animation: deckShimmer 1.6s ease-in-out infinite;
 }
 @keyframes deckShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.decklist-card-name { font-size: 10.5px; font-weight: 600; color: #5b6172; line-height: 1.25; }
-.decklist-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.decklist-card-name { display: block; padding: 0 6px; font-size: 10.5px; font-weight: 600; color: #5b6172; line-height: 1.25; }
+.decklist-card-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .decklist-card-badge { position: absolute; left: 5px; bottom: 5px; min-width: 18px; height: 18px;
   padding: 0 4px; border-radius: 999px; background: var(--primary); color: #fff;
   font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center;
