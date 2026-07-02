@@ -211,7 +211,7 @@
         var orderBadge = r.wentFirst === true  ? el("span", { class: "order-badge" }, ["先"])
                        : r.wentFirst === false ? el("span", { class: "order-badge" }, ["后"])
                        : null;
-        rounds.appendChild(el("div", { class: "round-row " + rowClass(r) }, [
+        var roundRow = el("div", { class: "round-row " + rowClass(r) }, [
           el("div", { class: "rnum" }, [String(r.number)]),
           opp,
           orderBadge,
@@ -225,7 +225,15 @@
               S.deleteRound(id, r.id); t = S.getTournament(id); renderRounds();
               var newRec = S.computeRecord(t.rounds); main.querySelector(".big-rec").textContent = newRec.label;
             } })
-        ]));
+        ]);
+        if (r.note) {
+          rounds.appendChild(el("div", { class: "round-item" }, [
+            roundRow,
+            el("div", { class: "round-note" }, [r.note])
+          ]));
+        } else {
+          rounds.appendChild(roundRow);
+        }
       });
     }
     renderRounds();
@@ -257,8 +265,8 @@
     var draft = existing
       ? { opponentDeck: [(existing.opponentDeck||[])[0]||null, (existing.opponentDeck||[])[1]||null],
           result: existing.result || "W", wentFirst: existing.wentFirst !== undefined ? existing.wentFirst : null,
-          special: existing.special || "" }
-      : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "" };
+          special: existing.special || "", note: existing.note || "" }
+      : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "", note: "" };
 
     var resultSeg = el("div", { class: "seg" }, ["W", "L"].map(function (v) {
       return el("div", { class: "opt", "data-v": v, onclick: function () { draft.result = v; draft.special = ""; sync(); } },
@@ -301,11 +309,14 @@
       orderSeg,
       el("label", { class: "lbl" }, ["其他结果"]),
       outcomeSeg,
+      el("label", { class: "lbl" }, ["备注（复盘用，可选）"]),
+      el("textarea", { class: "note-input", placeholder: "比如：对面缺能量、关键卡没抽到…",
+        oninput: function () { draft.note = this.value; } }, [draft.note]),
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-ghost", onclick: function () { done(null); } }, ["取消"]),
         el("button", { class: "btn btn-primary", onclick: function () {
           done({ result: draft.result, wentFirst: draft.wentFirst, special: draft.special,
-            opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean) });
+            opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim() });
         } }, [existing ? "保存" : "添加"])
       ])
     ]);
@@ -446,8 +457,9 @@
   }
 
   // ---------------------------------------------------------------- STATS
+  var statsFormatFilter = "";
+
   function renderStats() {
-    var s = S.computeStats();
     main.innerHTML = "";
     main.appendChild(el("div", { class: "page-title" }, ["数据"]));
     main.appendChild(el("p", { class: "page-sub" }, ["整体胜率、卡组表现与对位统计"]));
@@ -457,23 +469,47 @@
       el("button", { class: "btn btn-ghost", style: "flex:1", onclick: openBackupImportModal }, ["恢复备份"])
     ]));
 
+    // Standard rotates, so all-time stats mixing multiple formats aren't
+    // really comparable — offer a filter once there's more than one format
+    // in the data.
+    var formats = S.loadTournaments().map(function (t) { return t.format; })
+      .filter(function (f, i, a) { return f && a.indexOf(f) === i; });
+    if (formats.length > 1) {
+      var fmtSel = el("select", { class: "select", onchange: function () { statsFormatFilter = this.value; renderStats(); } },
+        [el("option", { value: "", selected: statsFormatFilter === "" ? "selected" : null }, ["全部赛制"])].concat(
+          formats.map(function (f) {
+            return el("option", { value: f, selected: statsFormatFilter === f ? "selected" : null }, [f]);
+          })));
+      main.appendChild(el("div", { class: "filters" }, [fmtSel]));
+    } else {
+      statsFormatFilter = "";
+    }
+
+    var s = S.computeStats(statsFormatFilter || undefined);
+
     if (!s.games) {
-      main.appendChild(el("div", { class: "empty" }, ["还没有对局数据。先到「锦标赛」记录几轮对局吧。"]));
+      main.appendChild(el("div", { class: "empty" }, [
+        statsFormatFilter ? "这个赛制下还没有对局数据。" : "还没有对局数据。先到「锦标赛」记录几轮对局吧。"
+      ]));
       return;
     }
 
-    function tile(num, cap, accent) {
-      return el("div", { class: "stat-tile" }, [
-        el("div", { class: "num" + (accent ? " accent" : "") }, [num]),
-        el("div", { class: "cap" }, [cap])
-      ]);
-    }
     function rate(w, l) { var g = w + l; return g ? Math.round(w / g * 100) + "%" : "—"; }
 
-    main.appendChild(el("div", { class: "stat-grid" }, [
-      tile(String(s.tournaments), "锦标赛"),
-      tile(s.winRate + "%", "总胜率", true),
-      tile(s.wins + "-" + s.losses, "总战绩")
+    // Single overall win-rate = one total split into two — a ring reads
+    // better here than a bar. The deck/matchup lists below stay bars,
+    // since bars are what actually compare well across many rows at once.
+    main.appendChild(el("div", { class: "winrate-hero" }, [
+      el("div", { class: "winrate-ring", style: "--wr:" + s.winRate }, [
+        el("div", { class: "winrate-ring-hole" }, [
+          el("div", { class: "winrate-ring-pct" }, [s.winRate + "%"]),
+          el("div", { class: "winrate-ring-cap" }, ["总胜率"])
+        ])
+      ]),
+      el("div", { class: "winrate-hero-side" }, [
+        el("div", { class: "whs-row" }, [el("b", {}, [String(s.tournaments)]), " 场锦标赛"]),
+        el("div", { class: "whs-row" }, [el("b", {}, [s.wins + "-" + s.losses]), " 总战绩"])
+      ])
     ]));
 
     main.appendChild(el("div", { class: "order-card" }, [

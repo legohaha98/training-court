@@ -149,8 +149,12 @@
   function deckKey(ids) { return (ids || []).slice().sort(function (a, b) { return a - b; }).join("-"); }
 
   // Aggregate win-rate + per-deck + matchup stats across all tournaments.
-  function computeStats() {
+  // format: optional — when given, only tournaments with that exact format
+  // are included (Standard rotates, so all-time stats mix formats that
+  // aren't really comparable to each other).
+  function computeStats(format) {
     var ts = loadTournaments();
+    if (format) ts = ts.filter(function (t) { return t.format === format; });
     var s = {
       tournaments: ts.length, wins: 0, losses: 0,
       firstWins: 0, firstLosses: 0, secondWins: 0, secondLosses: 0,
@@ -268,7 +272,8 @@
           (r.opponentDeck || [])[1] || 0,
           r.result === "W" ? 0 : 1,
           r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
-          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0
+          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0,
+          r.note || ""            // index 5, added after round notes existed
         ];
       }),
       _encodeDecklist(t.decklist)   // index 8, added after decklists existed — absent in older codes
@@ -294,7 +299,8 @@
             opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
             result: r[2] === 0 ? "W" : "L",
             wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-            special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : ""
+            special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
+            note: r[5] || ""
           };
         }),
         decklist: _decodeDecklist(compact[8])
@@ -373,7 +379,8 @@
             (r.opponentDeck || [])[1] || 0,
             r.result === "W" ? 0 : 1,
             r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
-            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0
+            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0,
+            r.note || ""            // index 5, added after round notes existed
           ];
         }),
         _encodeDecklist(t.decklist)   // index 7, added after decklists existed — absent in older codes
@@ -401,7 +408,8 @@
               opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
               result: r[2] === 0 ? "W" : "L",
               wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : ""
+              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
+              note: r[5] || ""
             };
           }),
           decklist: _decodeDecklist(c[7])
