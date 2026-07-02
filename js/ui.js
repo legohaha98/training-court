@@ -36,16 +36,29 @@
     return wrap;
   }
 
-  /* Card-art lookup for decklist cards. Tries the locally bundled image
-   * first (web/assets/cards/<SET>-<NUMBER>.png — downloaded ahead of time by
-   * shared/fetch-card-images.mjs from real decklists, since most decks reuse
-   * a lot of the same staples), which is near-instant; only falls back to a
-   * live pokemontcg.io lookup (set.ptcgoCode + number — the same set-code
-   * scheme the pasted Play!Pokémon decklist text already uses, e.g.
-   * "MEG 104") for cards that haven't been bundled yet. A lookup miss
-   * either way just leaves the plain-text card row in place (see
-   * deckCardTile in app.js) — there's no guarantee of 100% coverage. */
+  /* Card-art lookup for decklist cards. Tries, in order:
+   *   1. the locally bundled image at its own (set,number) key
+   *      (web/assets/cards/<SET>-<NUMBER>.png — downloaded ahead of time by
+   *      shared/fetch-card-images.mjs);
+   *   2. the same NAME's bundled art under a different (set,number) — cards
+   *      are deduped by name (Ultra Ball from any set is the same card, a
+   *      basic Energy only differs by type, not printing), see
+   *      web/assets/cards/_index.json, built by that same script;
+   *   3. a live pokemontcg.io lookup (set.ptcgoCode + number, falling back
+   *      to a pure name search) for cards that haven't been bundled at all.
+   * Steps 1-2 are near-instant; a lookup miss at every step just leaves the
+   * plain-text card row in place (see deckCardTile in app.js) — there's no
+   * guarantee of 100% coverage. */
   var _cardImgCache = {};
+  var _nameIndexPromise = null;
+  function loadCardNameIndex() {
+    if (!_nameIndexPromise) {
+      _nameIndexPromise = fetch("assets/cards/_index.json")
+        .then(function (res) { return res.ok ? res.json() : {}; })
+        .catch(function () { return {}; });
+    }
+    return _nameIndexPromise;
+  }
   function probeImage(url) {
     return new Promise(function (resolve) {
       var img = new Image();
@@ -54,12 +67,24 @@
       img.src = url;
     });
   }
-  function fetchCardImage(set, number) {
+  function fetchCardImage(set, number, name) {
     if (!set || !number) return Promise.resolve(null);
     var key = set + "|" + number;
     if (Object.prototype.hasOwnProperty.call(_cardImgCache, key)) return Promise.resolve(_cardImgCache[key]);
     return probeImage("assets/cards/" + set + "-" + number + ".png").then(function (localUrl) {
       if (localUrl) { _cardImgCache[key] = localUrl; return localUrl; }
+      if (!name) return liveLookup();
+      return loadCardNameIndex().then(function (index) {
+        var aliasKey = index[name];
+        if (!aliasKey) return liveLookup();
+        return probeImage("assets/cards/" + aliasKey + ".png").then(function (aliasUrl) {
+          if (aliasUrl) { _cardImgCache[key] = aliasUrl; return aliasUrl; }
+          return liveLookup();
+        });
+      });
+    });
+
+    function liveLookup() {
       var url = "https://api.pokemontcg.io/v2/cards?q=" + encodeURIComponent("set.ptcgoCode:" + set + " number:" + number);
       return fetch(url).then(function (res) { return res.ok ? res.json() : null; })
         .then(function (data) {
@@ -69,7 +94,7 @@
           return img;
         })
         .catch(function () { _cardImgCache[key] = null; return null; });
-    });
+    }
   }
 
   /* PokemonPicker — opens a full-screen bottom sheet on mobile so the user

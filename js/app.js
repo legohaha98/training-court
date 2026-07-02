@@ -330,7 +330,7 @@
       el("div", { class: "decklist-card-meta" }, [c.set ? (c.set + " " + c.number) : ""])
     ]);
     if (window.UI && UI.fetchCardImage) {
-      UI.fetchCardImage(c.set, c.number).then(function (url) {
+      UI.fetchCardImage(c.set, c.number, c.name).then(function (url) {
         if (!url) return;
         var img = el("img", { src: url, alt: c.name, class: "decklist-card-img" });
         img.addEventListener("load", function () { art.innerHTML = ""; art.appendChild(img); tile.classList.add("has-img"); });
