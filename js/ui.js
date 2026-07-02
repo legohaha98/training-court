@@ -43,7 +43,8 @@
   function PokemonPicker(opts) {
     var value = opts.value || null;
     var root = el("div", { class: "picker" });
-    var sheet = null; // the full-screen overlay, appended to body
+    var sheet = null;          // the full-screen overlay, appended to body
+    var syncViewport = null;   // set in openSheet, cleared/removed in closeSheet
 
     function renderBox() {
       root.innerHTML = "";
@@ -88,11 +89,31 @@
         oninput: function () { renderList(this.value); } });
       searchWrap.appendChild(searchEl);
 
+      // "常用" quick-pick row — the Pokémon this user picks most often across
+      // every tournament, so common decks don't need to be typed out every time.
+      var freqIds = (window.Store && Store.frequentPokemonIds) ? Store.frequentPokemonIds(12) : [];
+      var freqWrap = null;
+      if (freqIds.length) {
+        var freqRow = el("div", { class: "picker-freq-row" }, freqIds.map(function (id) {
+          var chip = el("div", { class: "picker-freq-chip" }, [sprite(id), el("span", { class: "nm" }, [pokeName(id)])]);
+          chip.addEventListener("click", function () {
+            value = id; opts.onChange(id);
+            closeSheet(); renderBox();
+          });
+          return chip;
+        }));
+        freqWrap = el("div", { class: "picker-freq-wrap" }, [
+          el("div", { class: "picker-freq-label" }, ["常用"]),
+          freqRow
+        ]);
+      }
+
       // scrollable list
       var listEl = el("div", { class: "picker-sheet-list" });
 
       function renderList(q) {
         q = (q || "").toLowerCase();
+        if (freqWrap) freqWrap.style.display = q ? "none" : "";
         listEl.innerHTML = "";
         (window.POKEMON || []).filter(function (p) {
           return p.name.toLowerCase().indexOf(q) !== -1;
@@ -111,6 +132,7 @@
 
       panel.appendChild(header);
       panel.appendChild(searchWrap);
+      if (freqWrap) panel.appendChild(freqWrap);
       panel.appendChild(listEl);
       sheet.appendChild(panel);
       document.body.appendChild(sheet);
@@ -127,12 +149,33 @@
 
       // focus search after animation starts
       setTimeout(function () { searchEl.focus(); }, 80);
+
+      // Keep the sheet's real height/position pinned to the visual viewport —
+      // on iOS Safari a fixed-position sheet otherwise keeps its full-screen
+      // layout-viewport size when the keyboard opens, so results (especially
+      // a single exact-match result) end up hidden behind the keyboard.
+      syncViewport = function () {
+        var vv = window.visualViewport;
+        if (!vv) return;
+        sheet.style.height = vv.height + "px";
+        sheet.style.top = vv.offsetTop + "px";
+      };
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncViewport);
+        window.visualViewport.addEventListener("scroll", syncViewport);
+        syncViewport();
+      }
     }
 
     function closeSheet() {
       if (!sheet) return;
       var panel = sheet.querySelector(".picker-sheet");
       panel.classList.remove("open");
+      if (window.visualViewport && syncViewport) {
+        window.visualViewport.removeEventListener("resize", syncViewport);
+        window.visualViewport.removeEventListener("scroll", syncViewport);
+        syncViewport = null;
+      }
       panel.addEventListener("transitionend", function () {
         if (sheet) { document.body.removeChild(sheet); sheet = null; }
       }, { once: true });

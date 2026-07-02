@@ -198,6 +198,24 @@
     return s;
   }
 
+  // Most-picked Pokémon across every tournament (my deck + every round's
+  // opponent deck), most frequent first. Powers the picker's "常用" quick-pick
+  // row so users don't have to type a name for decks they see all the time.
+  function frequentPokemonIds(limit) {
+    var counts = {};
+    loadTournaments().forEach(function (t) {
+      (t.deck || []).forEach(function (id) { counts[id] = (counts[id] || 0) + 1; });
+      (t.rounds || []).forEach(function (r) {
+        (r.opponentDeck || []).forEach(function (id) { counts[id] = (counts[id] || 0) + 1; });
+      });
+    });
+    return Object.keys(counts)
+      .map(function (k) { return { id: Number(k), count: counts[k] }; })
+      .sort(function (a, b) { return b.count - a.count; })
+      .slice(0, limit || 10)
+      .map(function (x) { return x.id; });
+  }
+
   /*
    * Compact export format v1 — an array tuned for minimum characters:
    * [ver, name, date, catIdx, format, placeIdx, [deckIds], [rounds]]
@@ -334,6 +352,7 @@
     addRound: addRound, deleteRound: deleteRound, updateRound: updateRound,
     loadLogs: loadLogs, addLog: addLog, deleteLog: deleteLog,
     computeRecord: computeRecord, computeStats: computeStats,
+    frequentPokemonIds: frequentPokemonIds,
     exportTournament: exportTournament, importTournament: importTournament,
     exportAllTournaments: exportAllTournaments, importAllTournaments: importAllTournaments,
     isStorageOk: function () { return STORAGE_OK; }

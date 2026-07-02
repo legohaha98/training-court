@@ -132,6 +132,7 @@
       el("div", { class: "grip" }),
       el("h2", {}, [editing ? "编辑锦标赛" : "新建锦标赛"]),
       el("div", { class: "field" }, [nameI]),
+      el("label", { class: "lbl" }, ["比赛日期"]),
       el("div", { class: "field" }, [dateI]),
       el("div", { class: "field" }, [catI]),
       el("div", { class: "field" }, [fmtI]),
