@@ -2,11 +2,14 @@
  * TRAINING COURT — Service Worker
  * Strategy:
  *   Shell files (HTML/CSS/JS/icons) → pre-cached on install, served cache-first.
- *   Sprites                         → lazy cached on first fetch, then cache-first.
- * After the first full visit the app runs 100% offline.
+ *   Sprites + bundled card art      → lazy cached on first fetch, then cache-first.
+ * After the first full visit the app runs 100% offline (except decklist
+ * card art that falls all the way through to the live pokemontcg.io
+ * lookup — that always needs network, by design; see ui.js fetchCardImage).
  */
-var SHELL_V   = "tc-shell-v10";
+var SHELL_V   = "tc-shell-v11";
 var SPRITE_V  = "tc-sprites-v1";
+var CARD_V    = "tc-cards-v1";
 
 var SHELL = [
   "./",
@@ -40,7 +43,7 @@ self.addEventListener("activate", function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(
-        keys.filter(function (k) { return k !== SHELL_V && k !== SPRITE_V; })
+        keys.filter(function (k) { return k !== SHELL_V && k !== SPRITE_V && k !== CARD_V; })
             .map(function (k) { return caches.delete(k); })
       );
     }).then(function () { return self.clients.claim(); })
@@ -55,7 +58,8 @@ self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
 
   var isSprite = url.indexOf("/assets/sprites/") !== -1;
-  var cacheName = isSprite ? SPRITE_V : SHELL_V;
+  var isCardImg = url.indexOf("/assets/cards/") !== -1;
+  var cacheName = isSprite ? SPRITE_V : isCardImg ? CARD_V : SHELL_V;
 
   e.respondWith(
     caches.open(cacheName).then(function (cache) {

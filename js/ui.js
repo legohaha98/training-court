@@ -36,26 +36,40 @@
     return wrap;
   }
 
-  /* Card-art lookup for decklist cards, via the public pokemontcg.io API
-   * (set.ptcgoCode + number — the same set-code scheme used in the pasted
-   * Play!Pokémon decklist text, e.g. "MEG 104"). In-memory only for this
-   * session; no bundled offline database like the Pokémon sprites have, so
-   * this is best-effort — a lookup miss/offline just leaves the plain-text
-   * card row in place (see deckCardTile in app.js). */
+  /* Card-art lookup for decklist cards. Tries the locally bundled image
+   * first (web/assets/cards/<SET>-<NUMBER>.png — downloaded ahead of time by
+   * shared/fetch-card-images.mjs from real decklists, since most decks reuse
+   * a lot of the same staples), which is near-instant; only falls back to a
+   * live pokemontcg.io lookup (set.ptcgoCode + number — the same set-code
+   * scheme the pasted Play!Pokémon decklist text already uses, e.g.
+   * "MEG 104") for cards that haven't been bundled yet. A lookup miss
+   * either way just leaves the plain-text card row in place (see
+   * deckCardTile in app.js) — there's no guarantee of 100% coverage. */
   var _cardImgCache = {};
+  function probeImage(url) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () { resolve(url); };
+      img.onerror = function () { resolve(null); };
+      img.src = url;
+    });
+  }
   function fetchCardImage(set, number) {
     if (!set || !number) return Promise.resolve(null);
     var key = set + "|" + number;
     if (Object.prototype.hasOwnProperty.call(_cardImgCache, key)) return Promise.resolve(_cardImgCache[key]);
-    var url = "https://api.pokemontcg.io/v2/cards?q=" + encodeURIComponent("set.ptcgoCode:" + set + " number:" + number);
-    return fetch(url).then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (data) {
-        var card = data && data.data && data.data[0];
-        var img = card && card.images && (card.images.small || card.images.large) || null;
-        _cardImgCache[key] = img;
-        return img;
-      })
-      .catch(function () { _cardImgCache[key] = null; return null; });
+    return probeImage("assets/cards/" + set + "-" + number + ".png").then(function (localUrl) {
+      if (localUrl) { _cardImgCache[key] = localUrl; return localUrl; }
+      var url = "https://api.pokemontcg.io/v2/cards?q=" + encodeURIComponent("set.ptcgoCode:" + set + " number:" + number);
+      return fetch(url).then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          var card = data && data.data && data.data[0];
+          var img = card && card.images && (card.images.small || card.images.large) || null;
+          _cardImgCache[key] = img;
+          return img;
+        })
+        .catch(function () { _cardImgCache[key] = null; return null; });
+    });
   }
 
   /* PokemonPicker — opens a full-screen bottom sheet on mobile so the user
