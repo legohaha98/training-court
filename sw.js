@@ -5,7 +5,7 @@
  *   Sprites                         → lazy cached on first fetch, then cache-first.
  * After the first full visit the app runs 100% offline.
  */
-var SHELL_V   = "tc-shell-v3";
+var SHELL_V   = "tc-shell-v4";
 var SPRITE_V  = "tc-sprites-v1";
 
 var SHELL = [
