@@ -185,8 +185,6 @@
     ]);
     main.appendChild(chips);
 
-    main.appendChild(renderDecklistSection(t));
-
     // rounds (card rows) — each has an edit pencil that swaps the row for an inline form
     var editingRid = null;
     var rounds = el("div", { class: "rounds" });
@@ -244,6 +242,12 @@
       }));
       addArea.scrollIntoView({ behavior: "smooth", block: "center" });
     } }, ["＋  添加一轮"]));
+
+    // decklist sits below rounds and is collapsed by default — rounds are
+    // what you check most often, and the card-art grid is both tall and
+    // slow (live API lookups), so it shouldn't push rounds off-screen or
+    // start fetching anything until the user actually opens it.
+    main.appendChild(renderDecklistSection(t));
   }
 
   // inline add/edit-round form
@@ -335,14 +339,39 @@
     return tile;
   }
 
+  // Collapsed by default: rounds are what you check most often, and the
+  // card grid is both tall and slow (live per-card API lookups), so the
+  // grid isn't built — and no image fetches fire — until the user expands it.
   function renderDecklistSection(t) {
     var list = t.decklist || [];
     if (!list.length) {
       return el("button", { class: "add-round-btn", onclick: function () { openDecklistModal(t); } }, ["＋  添加卡组"]);
     }
+    var totalCards = list.reduce(function (n, c) { return n + (c.count || 1); }, 0);
     var wrap = el("div", { class: "decklist-section" });
+    var body = el("div", { class: "decklist-body" });
+
+    var toggle = el("div", { class: "decklist-toggle" }, [
+      el("span", {}, ["卡组 · 共 " + totalCards + " 张"]),
+      el("span", { class: "decklist-toggle-chev" }, ["▾"])
+    ]);
+    toggle.addEventListener("click", function () {
+      var open = wrap.classList.toggle("open");
+      if (open && !body.childNodes.length) {
+        DECK_CAT_LABELS.forEach(function (cat) {
+          var items = list.filter(function (c) { return c.category === cat.key; });
+          if (!items.length) return;
+          var catTotal = items.reduce(function (n, c) { return n + (c.count || 1); }, 0);
+          body.appendChild(el("div", { class: "decklist-cat-label" }, [cat.label + " · " + catTotal]));
+          var grid = el("div", { class: "decklist-grid" });
+          items.forEach(function (c) { grid.appendChild(deckCardTile(c)); });
+          body.appendChild(grid);
+        });
+      }
+    });
+
     wrap.appendChild(el("div", { class: "decklist-head" }, [
-      el("h3", {}, ["卡组"]),
+      toggle,
       el("div", { class: "detail-tools" }, [
         el("button", { class: "tool", "aria-label": "导出卡组", title: "导出卡组", onclick: function () { openDecklistExportModal(t); } },
           [el("img", { src: "assets/icon-export.svg", alt: "" })]),
@@ -350,15 +379,7 @@
           [el("img", { src: "assets/icon-edit.svg", alt: "" })])
       ])
     ]));
-    DECK_CAT_LABELS.forEach(function (cat) {
-      var items = list.filter(function (c) { return c.category === cat.key; });
-      if (!items.length) return;
-      var total = items.reduce(function (n, c) { return n + (c.count || 1); }, 0);
-      wrap.appendChild(el("div", { class: "decklist-cat-label" }, [cat.label + " · " + total]));
-      var grid = el("div", { class: "decklist-grid" });
-      items.forEach(function (c) { grid.appendChild(deckCardTile(c)); });
-      wrap.appendChild(grid);
-    });
+    wrap.appendChild(body);
     return wrap;
   }
 

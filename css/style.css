@@ -176,9 +176,14 @@ img { image-rendering: pixelated; }
 .add-round-btn:active { background: #eef0f5; }
 
 /* ---- decklist ---- */
-.decklist-section { margin-top: 16px; }
-.decklist-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.decklist-head h3 { margin: 0; font-size: 16px; }
+.decklist-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.decklist-head { display: flex; align-items: center; justify-content: space-between; }
+.decklist-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 16px; font-weight: 700; -webkit-tap-highlight-color: transparent; }
+.decklist-toggle-chev { display: inline-block; font-size: 12px; color: var(--muted); transition: transform .2s; }
+.decklist-section.open .decklist-toggle-chev { transform: rotate(180deg); }
+.decklist-body { display: none; }
+.decklist-section.open .decklist-body { display: block; margin-top: 10px; }
 .decklist-cat-label { font-size: 12.5px; font-weight: 700; color: var(--muted); margin: 14px 0 8px; }
 .decklist-cat-label:first-of-type { margin-top: 0; }
 .decklist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px; }
@@ -186,6 +191,13 @@ img { image-rendering: pixelated; }
   box-shadow: var(--shadow); }
 .decklist-card-art { aspect-ratio: 5 / 7; display: flex; align-items: center; justify-content: center;
   padding: 6px; text-align: center; }
+/* shimmer while a card image is still loading, so the wait reads as
+   "loading" rather than "broken" — stops once .has-img is added */
+.decklist-card:not(.has-img) .decklist-card-art {
+  background: linear-gradient(100deg, #eceef4 30%, #f6f7fa 50%, #eceef4 70%);
+  background-size: 200% 100%; animation: deckShimmer 1.6s ease-in-out infinite;
+}
+@keyframes deckShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .decklist-card-name { font-size: 10.5px; font-weight: 600; color: #5b6172; line-height: 1.25; }
 .decklist-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .decklist-card-badge { position: absolute; left: 5px; bottom: 5px; min-width: 18px; height: 18px;
