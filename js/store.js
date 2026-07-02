@@ -269,6 +269,64 @@
     } catch (e) { return null; }
   }
 
+  /*
+   * Full backup format — bundles every tournament into one code, for the
+   * "backup all data" flow (see [[trainingcourt-tcg-tracker]] memory: iOS wipes
+   * localStorage when a Home Screen web-app icon is deleted, so this is the
+   * user's manual safety net against that). Tagged "ALL1" (not the number 1)
+   * so it can never be mistaken for / parsed by the single-tournament
+   * exportTournament/importTournament codes, which must keep their exact
+   * existing wire format for backward compatibility with codes already saved
+   * by users.
+   */
+  function exportAllTournaments() {
+    var ts = loadTournaments();
+    var bundle = ts.map(function (t) {
+      var ci = EXP_CATS.indexOf(t.category || ""); if (ci < 0) ci = 0;
+      var pi = EXP_PLACES.indexOf(t.placement || ""); if (pi < 0) pi = 0;
+      return [
+        t.name, t.date, ci, t.format || "", pi, t.deck || [],
+        (t.rounds || []).map(function (r) {
+          return [
+            (r.opponentDeck || [])[0] || 0,
+            (r.opponentDeck || [])[1] || 0,
+            r.result === "W" ? 0 : 1,
+            r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
+            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0
+          ];
+        })
+      ];
+    });
+    return _b64enc(JSON.stringify(["ALL1", bundle]));
+  }
+
+  function importAllTournaments(code) {
+    try {
+      var outer = JSON.parse(_b64dec(code.trim()));
+      if (!Array.isArray(outer) || outer[0] !== "ALL1") return null;
+      return outer[1].map(function (c) {
+        return {
+          name: c[0] || "Imported",
+          date: c[1] || new Date().toISOString().slice(0, 10),
+          category: EXP_CATS[c[2]] || "",
+          format: c[3] || "",
+          placement: EXP_PLACES[c[4]] || "",
+          deck: c[5] || [],
+          rounds: (c[6] || []).map(function (r, i) {
+            return {
+              id: uid(),
+              number: i + 1,
+              opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
+              result: r[2] === 0 ? "W" : "L",
+              wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
+              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : ""
+            };
+          })
+        };
+      });
+    } catch (e) { return null; }
+  }
+
   window.Store = {
     loadTournaments: loadTournaments, saveTournaments: saveTournaments,
     getTournament: getTournament, addTournament: addTournament,
@@ -277,6 +335,7 @@
     loadLogs: loadLogs, addLog: addLog, deleteLog: deleteLog,
     computeRecord: computeRecord, computeStats: computeStats,
     exportTournament: exportTournament, importTournament: importTournament,
+    exportAllTournaments: exportAllTournaments, importAllTournaments: importAllTournaments,
     isStorageOk: function () { return STORAGE_OK; }
   };
 })();

@@ -308,6 +308,11 @@
     main.appendChild(el("div", { class: "page-title" }, ["数据"]));
     main.appendChild(el("p", { class: "page-sub" }, ["整体胜率、卡组表现与对位统计"]));
 
+    main.appendChild(el("div", { class: "row-actions" }, [
+      el("button", { class: "btn btn-ghost", style: "flex:1", onclick: openBackupExportModal }, ["备份全部数据"]),
+      el("button", { class: "btn btn-ghost", style: "flex:1", onclick: openBackupImportModal }, ["恢复备份"])
+    ]));
+
     if (!s.games) {
       main.appendChild(el("div", { class: "empty" }, ["还没有对局数据。先到「锦标赛」记录几轮对局吧。"]));
       return;
@@ -426,6 +431,83 @@
       el("h2", {}, ["导入锦标赛"]),
       el("p", { style: "color:var(--muted);font-size:13px;margin:0 0 10px" }, [
         "将之前导出的代码粘贴到下方，点击导入还原锦标赛。"
+      ]),
+      el("div", { class: "field" }, [ta]),
+      errMsg,
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost", onclick: closeOverlay }, ["取消"]),
+        importBtn
+      ])
+    ]));
+    setTimeout(function () { ta.focus(); }, 100);
+  }
+
+  // ---------------------------------------------------------------- BACKUP / RESTORE (all tournaments)
+  function openBackupExportModal() {
+    var code = S.exportAllTournaments();
+    var ta = el("textarea", {
+      class: "export-code", readonly: "readonly",
+      style: "width:100%;height:140px;resize:none;font-family:monospace;font-size:12px;" +
+             "border:1px solid var(--line);border-radius:10px;padding:10px;background:#f4f5f8;"
+    });
+    ta.value = code;
+
+    var copyBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      navigator.clipboard ? navigator.clipboard.writeText(code).then(function () {
+        copyBtn.textContent = "已复制 ✓";
+        setTimeout(function () { copyBtn.textContent = "复制代码"; }, 2000);
+      }) : (ta.select(), document.execCommand("copy"), copyBtn.textContent = "已复制 ✓");
+    } }, ["复制代码"]);
+
+    var n = S.loadTournaments().length;
+    var byteLen = new TextEncoder().encode(code).length;
+    showOverlay(el("div", { class: "modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["备份全部数据"]),
+      el("p", { style: "color:var(--muted);font-size:13px;margin:0 0 10px" }, [
+        "共 " + n + " 个锦标赛 · " + byteLen + " 字节"
+      ]),
+      el("div", { class: "field" }, [ta]),
+      el("p", { style: "color:var(--muted);font-size:12px;margin:4px 0 12px" }, [
+        "复制后存到备忘录、微信收藏等地方。数据只存在这台设备的浏览器里——换手机、删除主屏幕图标都可能清空数据，定期备份才安全。"
+      ]),
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost", onclick: closeOverlay }, ["关闭"]),
+        copyBtn
+      ])
+    ]));
+    setTimeout(function () { ta.select(); }, 100);
+  }
+
+  function openBackupImportModal() {
+    var ta = el("textarea", {
+      class: "export-code",
+      placeholder: "粘贴备份代码…",
+      style: "width:100%;height:140px;resize:none;font-family:monospace;font-size:12px;" +
+             "border:1px solid var(--line);border-radius:10px;padding:10px;background:#f4f5f8;"
+    });
+    var errMsg = el("p", { style: "color:var(--loss-ink);font-size:13px;margin:6px 0 0;display:none" },
+      ["代码无效，请检查是否复制完整。"]);
+
+    var importBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      var list = S.importAllTournaments(ta.value);
+      if (!list) { errMsg.style.display = "block"; return; }
+      list.forEach(function (data) {
+        var t = S.addTournament(data);
+        (data.rounds || []).forEach(function (r) {
+          S.addRound(t.id, { result: r.result, wentFirst: r.wentFirst, special: r.special,
+            opponentDeck: r.opponentDeck });
+        });
+      });
+      closeOverlay();
+      location.hash = "#/tournaments";
+    } }, ["导入"]);
+
+    showOverlay(el("div", { class: "modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["恢复备份"]),
+      el("p", { style: "color:var(--muted);font-size:13px;margin:0 0 10px" }, [
+        "粘贴之前「备份全部数据」生成的代码。会追加到现有锦标赛之后，不会覆盖或删除已有数据。"
       ]),
       el("div", { class: "field" }, [ta]),
       errMsg,
