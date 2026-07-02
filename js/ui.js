@@ -36,6 +36,28 @@
     return wrap;
   }
 
+  /* Card-art lookup for decklist cards, via the public pokemontcg.io API
+   * (set.ptcgoCode + number — the same set-code scheme used in the pasted
+   * Play!Pokémon decklist text, e.g. "MEG 104"). In-memory only for this
+   * session; no bundled offline database like the Pokémon sprites have, so
+   * this is best-effort — a lookup miss/offline just leaves the plain-text
+   * card row in place (see deckCardTile in app.js). */
+  var _cardImgCache = {};
+  function fetchCardImage(set, number) {
+    if (!set || !number) return Promise.resolve(null);
+    var key = set + "|" + number;
+    if (Object.prototype.hasOwnProperty.call(_cardImgCache, key)) return Promise.resolve(_cardImgCache[key]);
+    var url = "https://api.pokemontcg.io/v2/cards?q=" + encodeURIComponent("set.ptcgoCode:" + set + " number:" + number);
+    return fetch(url).then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        var card = data && data.data && data.data[0];
+        var img = card && card.images && (card.images.small || card.images.large) || null;
+        _cardImgCache[key] = img;
+        return img;
+      })
+      .catch(function () { _cardImgCache[key] = null; return null; });
+  }
+
   /* PokemonPicker — opens a full-screen bottom sheet on mobile so the user
    * always has the full viewport height to scroll, regardless of where the
    * picker box sits on the page.
@@ -187,6 +209,7 @@
 
   window.UI = {
     el: el, sprite: sprite, deckSprites: deckSprites,
-    spriteUrl: spriteUrl, pokeName: pokeName, PokemonPicker: PokemonPicker
+    spriteUrl: spriteUrl, pokeName: pokeName, PokemonPicker: PokemonPicker,
+    fetchCardImage: fetchCardImage
   };
 })();

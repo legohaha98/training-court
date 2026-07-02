@@ -185,6 +185,8 @@
     ]);
     main.appendChild(chips);
 
+    main.appendChild(renderDecklistSection(t));
+
     // rounds (card rows) — each has an edit pencil that swaps the row for an inline form
     var editingRid = null;
     var rounds = el("div", { class: "rounds" });
@@ -303,6 +305,123 @@
         } }, [existing ? "保存" : "添加"])
       ])
     ]);
+  }
+
+  // ---------------------------------------------------------------- DECKLIST
+  var DECK_CAT_LABELS = [
+    { key: "pokemon", label: "宝可梦" },
+    { key: "trainer", label: "训练家" },
+    { key: "energy", label: "能量" }
+  ];
+
+  // A single card tile: renders as text immediately, swaps in card art if/when
+  // UI.fetchCardImage resolves (best-effort, no offline database for this).
+  function deckCardTile(c) {
+    var art = el("div", { class: "decklist-card-art" }, [
+      el("span", { class: "decklist-card-name" }, [c.name])
+    ]);
+    var tile = el("div", { class: "decklist-card" }, [
+      art,
+      el("div", { class: "decklist-card-badge" }, [String(c.count)]),
+      el("div", { class: "decklist-card-meta" }, [c.set ? (c.set + " " + c.number) : ""])
+    ]);
+    if (window.UI && UI.fetchCardImage) {
+      UI.fetchCardImage(c.set, c.number).then(function (url) {
+        if (!url) return;
+        var img = el("img", { src: url, alt: c.name, class: "decklist-card-img" });
+        img.addEventListener("load", function () { art.innerHTML = ""; art.appendChild(img); tile.classList.add("has-img"); });
+      });
+    }
+    return tile;
+  }
+
+  function renderDecklistSection(t) {
+    var list = t.decklist || [];
+    if (!list.length) {
+      return el("button", { class: "add-round-btn", onclick: function () { openDecklistModal(t); } }, ["＋  添加卡组"]);
+    }
+    var wrap = el("div", { class: "decklist-section" });
+    wrap.appendChild(el("div", { class: "decklist-head" }, [
+      el("h3", {}, ["卡组"]),
+      el("div", { class: "detail-tools" }, [
+        el("button", { class: "tool", "aria-label": "导出卡组", title: "导出卡组", onclick: function () { openDecklistExportModal(t); } },
+          [el("img", { src: "assets/icon-export.svg", alt: "" })]),
+        el("button", { class: "tool", "aria-label": "编辑卡组", title: "编辑卡组", onclick: function () { openDecklistModal(t); } },
+          [el("img", { src: "assets/icon-edit.svg", alt: "" })])
+      ])
+    ]));
+    DECK_CAT_LABELS.forEach(function (cat) {
+      var items = list.filter(function (c) { return c.category === cat.key; });
+      if (!items.length) return;
+      var total = items.reduce(function (n, c) { return n + (c.count || 1); }, 0);
+      wrap.appendChild(el("div", { class: "decklist-cat-label" }, [cat.label + " · " + total]));
+      var grid = el("div", { class: "decklist-grid" });
+      items.forEach(function (c) { grid.appendChild(deckCardTile(c)); });
+      wrap.appendChild(grid);
+    });
+    return wrap;
+  }
+
+  function openDecklistModal(t) {
+    var ta = el("textarea", {
+      class: "export-code", placeholder: "粘贴卡组文字，例如：\n\nPokémon: 22\n4 Mega Kangaskhan ex MEG 104\n...\n\nTrainer: 28\n...\n\nEnergy: 10\n...",
+      style: "width:100%;height:220px;resize:none;font-family:monospace;font-size:12px;" +
+             "border:1px solid var(--line);border-radius:10px;padding:10px;background:#f4f5f8;"
+    });
+    ta.value = (t.decklist && t.decklist.length) ? S.formatDecklistText(t.decklist) : "";
+    var errMsg = el("p", { style: "color:var(--loss-ink);font-size:13px;margin:6px 0 0;display:none" },
+      ["没能从中识别出任何卡片，请检查格式（每行「数量 卡名 系列缩写 编号」）。"]);
+
+    var saveBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      var parsed = S.parseDecklistText(ta.value);
+      if (!parsed) { errMsg.style.display = "block"; return; }
+      S.updateTournament(t.id, { decklist: parsed.list });
+      closeOverlay();
+      renderDetail(t.id);
+    } }, ["保存"]);
+
+    showOverlay(el("div", { class: "modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["卡组"]),
+      el("p", { style: "color:var(--muted);font-size:13px;margin:0 0 10px" }, [
+        "粘贴 Limitless / Play!Pokémon 格式的卡组文字（Deck Builder 或 Limitless 都能导出这种格式）。"
+      ]),
+      el("div", { class: "field" }, [ta]),
+      errMsg,
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost", onclick: closeOverlay }, ["取消"]),
+        saveBtn
+      ])
+    ]));
+    setTimeout(function () { ta.focus(); }, 100);
+  }
+
+  function openDecklistExportModal(t) {
+    var code = S.formatDecklistText(t.decklist || []);
+    var ta = el("textarea", {
+      class: "export-code", readonly: "readonly",
+      style: "width:100%;height:220px;resize:none;font-family:monospace;font-size:12px;" +
+             "border:1px solid var(--line);border-radius:10px;padding:10px;background:#f4f5f8;"
+    });
+    ta.value = code;
+
+    var copyBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      navigator.clipboard ? navigator.clipboard.writeText(code).then(function () {
+        copyBtn.textContent = "已复制 ✓";
+        setTimeout(function () { copyBtn.textContent = "复制文字"; }, 2000);
+      }) : (ta.select(), document.execCommand("copy"), copyBtn.textContent = "已复制 ✓");
+    } }, ["复制文字"]);
+
+    showOverlay(el("div", { class: "modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["导出卡组"]),
+      el("div", { class: "field" }, [ta]),
+      el("div", { class: "row-actions" }, [
+        el("button", { class: "btn btn-ghost", onclick: closeOverlay }, ["关闭"]),
+        copyBtn
+      ])
+    ]));
+    setTimeout(function () { ta.select(); }, 100);
   }
 
   // ---------------------------------------------------------------- STATS

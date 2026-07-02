@@ -238,6 +238,19 @@
     }).join(""));
   }
 
+  // Decklist compact encode/decode, shared by exportTournament/exportAllTournaments.
+  var DECK_CATS = ["pokemon", "trainer", "energy"];
+  function _encodeDecklist(list) {
+    return (list || []).map(function (c) {
+      return [DECK_CATS.indexOf(c.category), c.count, c.name, c.set || "", c.number || ""];
+    });
+  }
+  function _decodeDecklist(arr) {
+    return (arr || []).map(function (c) {
+      return { category: DECK_CATS[c[0]] || "pokemon", count: c[1] || 1, name: c[2] || "", set: c[3] || "", number: c[4] || "" };
+    });
+  }
+
   function exportTournament(t) {
     var ci = EXP_CATS.indexOf(t.category || ""); if (ci < 0) ci = 0;
     var pi = EXP_PLACES.indexOf(t.placement || ""); if (pi < 0) pi = 0;
@@ -257,7 +270,8 @@
           r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
           r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0
         ];
-      })
+      }),
+      _encodeDecklist(t.decklist)   // index 8, added after decklists existed — absent in older codes
     ];
     return _b64enc(JSON.stringify(compact));
   }
@@ -282,9 +296,58 @@
             wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
             special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : ""
           };
-        })
+        }),
+        decklist: _decodeDecklist(compact[8])
       };
     } catch (e) { return null; }
+  }
+
+  /*
+   * Decklist text format — the official Play!Pokémon / Limitless plain-text
+   * decklist ("Pokémon: N" / "Trainer: N" / "Energy: N" section headers, then
+   * "<count> <name> <set> <number>" per line). parseDecklistText is the
+   * paste-in importer; formatDecklistText is its exact inverse for export.
+   */
+  var DECK_SECTIONS = [
+    { key: "pokemon", label: "Pokémon" },
+    { key: "trainer", label: "Trainer" },
+    { key: "energy", label: "Energy" }
+  ];
+
+  function parseDecklistText(text) {
+    var lines = (text || "").split(/\r?\n/);
+    var list = [];
+    var unparsed = [];
+    var section = null;
+    lines.forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+      var header = line.match(/^(Pok[eé]mon|Trainer|Energy)\s*:\s*\d+$/i);
+      if (header) { section = header[1].toLowerCase().indexOf("pok") === 0 ? "pokemon" : header[1].toLowerCase(); return; }
+      if (!section) { unparsed.push(line); return; }
+      var m = line.match(/^(\d+)\s+(.+?)\s+([A-Z0-9]{2,5})\s+(\S+)$/);
+      if (m) { list.push({ category: section, count: parseInt(m[1], 10), name: m[2], set: m[3], number: m[4] }); return; }
+      var m2 = line.match(/^(\d+)\s+(.+)$/);
+      if (m2) { list.push({ category: section, count: parseInt(m2[1], 10), name: m2[2].trim(), set: "", number: "" }); return; }
+      unparsed.push(line);
+    });
+    if (!list.length) return null;
+    return { list: list, unparsed: unparsed };
+  }
+
+  function formatDecklistText(list) {
+    var out = [];
+    DECK_SECTIONS.forEach(function (sec) {
+      var items = (list || []).filter(function (c) { return c.category === sec.key; });
+      if (!items.length) return;
+      var total = items.reduce(function (n, c) { return n + (c.count || 1); }, 0);
+      out.push(sec.label + ": " + total);
+      items.forEach(function (c) {
+        out.push(c.count + " " + c.name + (c.set ? " " + c.set : "") + (c.number ? " " + c.number : ""));
+      });
+      out.push("");
+    });
+    return out.join("\n").trim();
   }
 
   /*
@@ -312,7 +375,8 @@
             r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
             r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0
           ];
-        })
+        }),
+        _encodeDecklist(t.decklist)   // index 7, added after decklists existed — absent in older codes
       ];
     });
     return _b64enc(JSON.stringify(["ALL1", bundle]));
@@ -339,7 +403,8 @@
               wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
               special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : ""
             };
-          })
+          }),
+          decklist: _decodeDecklist(c[7])
         };
       });
     } catch (e) { return null; }
@@ -355,6 +420,7 @@
     frequentPokemonIds: frequentPokemonIds,
     exportTournament: exportTournament, importTournament: importTournament,
     exportAllTournaments: exportAllTournaments, importAllTournaments: importAllTournaments,
+    parseDecklistText: parseDecklistText, formatDecklistText: formatDecklistText,
     isStorageOk: function () { return STORAGE_OK; }
   };
 })();
