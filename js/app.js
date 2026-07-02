@@ -220,8 +220,11 @@
             onclick: function () { editingRid = r.id; renderRounds(); } },
             [el("img", { src: "assets/icon-edit.svg", alt: "编辑" })]),
           el("div", { class: "del", html: "✕", title: "删除该轮",
-            onclick: function () { S.deleteRound(id, r.id); t = S.getTournament(id); renderRounds();
-              var newRec = S.computeRecord(t.rounds); main.querySelector(".big-rec").textContent = newRec.label; } })
+            onclick: function () {
+              if (!confirm("确定删除第 " + r.number + " 轮？")) return;
+              S.deleteRound(id, r.id); t = S.getTournament(id); renderRounds();
+              var newRec = S.computeRecord(t.rounds); main.querySelector(".big-rec").textContent = newRec.label;
+            } })
         ]));
       });
     }
