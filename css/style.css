@@ -69,7 +69,9 @@ img { image-rendering: pixelated; }
   background: rgba(244, 245, 248, .86);
   backdrop-filter: saturate(160%) blur(12px);
   border-bottom: 1px solid var(--line);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color .12s;
 }
+.topbar:active { background: rgba(230, 232, 240, .92); }
 .topbar .logo { width: 26px; height: 26px; flex: 0 0 auto;
   image-rendering: auto; filter: drop-shadow(0 1px 2px rgba(20,24,45,.18)); }
 .topbar .brand { font-weight: 700; letter-spacing: .04em; font-size: 14px; }
@@ -396,7 +398,13 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .order-card .half .num { font-size: 19px; font-weight: 800; }
 .order-card .half .cap { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .stat-section { margin-top: 22px; }
-.stat-section h3 { font-size: 16px; margin: 0 0 10px; }
+.stat-section-toggle { display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; margin: 0 0 10px; -webkit-tap-highlight-color: transparent; }
+.stat-section-toggle h3 { font-size: 16px; margin: 0; }
+.stat-section-chev { font-size: 12px; color: var(--muted); transition: transform .2s; transform: rotate(180deg); }
+.stat-section:not(.open) .stat-section-chev { transform: rotate(0deg); }
+.stat-section-body { display: block; }
+.stat-section:not(.open) .stat-section-body { display: none; }
 .stat-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px; background: var(--card);
   border: 1px solid var(--line); border-radius: 14px; margin-bottom: 9px; box-shadow: var(--shadow); }
 .stat-row .icon-wrap { width: 84px; flex: 0 0 auto; display: flex; justify-content: center; }

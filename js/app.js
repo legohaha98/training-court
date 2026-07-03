@@ -607,10 +607,23 @@
         el("div", { class: "sr-wr" }, [item.winRate + "%"])
       ]);
     }
+    // Collapsible per section (open by default — this is the page's main
+    // content, unlike the decklist section elsewhere which defaults closed —
+    // but as the list of decks/matchups grows over a season, being able to
+    // fold either one away individually keeps the page manageable.
     function section(title, list, showTags) {
-      var sec = el("div", { class: "stat-section" }, [el("h3", {}, [title])]);
-      if (!list.length) sec.appendChild(el("div", { class: "empty", style: "padding:18px" }, ["暂无数据"]));
-      else list.forEach(function (it) { sec.appendChild(statRow(it, showTags)); });
+      var body = el("div", { class: "stat-section-body" });
+      if (!list.length) body.appendChild(el("div", { class: "empty", style: "padding:18px" }, ["暂无数据"]));
+      else list.forEach(function (it) { body.appendChild(statRow(it, showTags)); });
+
+      var sec = el("div", { class: "stat-section open" });
+      var toggle = el("div", { class: "stat-section-toggle" }, [
+        el("h3", {}, [title]),
+        el("span", { class: "stat-section-chev" }, ["▾"])
+      ]);
+      toggle.addEventListener("click", function () { sec.classList.toggle("open"); });
+      sec.appendChild(toggle);
+      sec.appendChild(body);
       return sec;
     }
     main.appendChild(section("我的卡组表现", s.decks, true));
@@ -822,6 +835,13 @@
   window.addEventListener("hashchange", router);
   window.addEventListener("DOMContentLoaded", function () {
     main = document.getElementById("main");
+    // iOS's native "tap the status bar to scroll to top" only works on the
+    // real document scroll — .content scrolls internally now (see .phone's
+    // height fix), so that gesture can't reach it. Tapping the app's own
+    // topbar is the closest equivalent and is a pattern users already know
+    // from other apps (Twitter/X etc.).
+    var topbar = document.querySelector(".topbar");
+    if (topbar) topbar.addEventListener("click", function () { main.scrollTo({ top: 0, behavior: "smooth" }); });
     // check immediately on load
     if (!S.isStorageOk()) showStorageWarning();
     router();
