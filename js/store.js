@@ -406,7 +406,7 @@
     lines.forEach(function (raw) {
       var line = raw.trim();
       if (!line) return;
-      var header = line.match(/^(Pok[eé]mon|Trainer|Energy)\s*:\s*\d+$/i);
+      var header = line.match(/^(Pok[eé]mon|Trainer|Energy)\s*(?::\s*\d+|\(\s*\d+\s*\))$/i);
       if (header) { section = header[1].toLowerCase().indexOf("pok") === 0 ? "pokemon" : header[1].toLowerCase(); return; }
       if (!section) { unparsed.push(line); return; }
       var m = line.match(/^(\d+)\s+(.+?)\s+([A-Z0-9]{2,5})\s+(\S+)$/);
