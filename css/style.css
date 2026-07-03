@@ -353,43 +353,22 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 /* Overall win rate = one total split into two — a ring reads better than a
    bar here. Per-deck/matchup lists below stay bars (see .wr-bar): bars are
    what actually compare well across many rows at a glance, a pie/ring does
-   not. Percentage is drawn via conic-gradient, no chart library needed. */
-/* Frosted-glass hero card. The page background is a flat light gray, so
-   backdrop blur alone would show nothing — the glass effect comes from
-   soft colored blobs painted INSIDE the card (::before, heavily blurred)
-   under a translucent white layer. The ring hole is fully opaque (not
-   translucent like the card) — letting the blobs ghost through it tinted
-   the "100%" text an ugly pale green when the win blob happened to sit
-   behind the ring. */
-.winrate-hero { position: relative; overflow: hidden; display: flex; align-items: center;
-  gap: 18px; background: rgba(255, 255, 255, .55); border: 1px solid rgba(255, 255, 255, .85);
-  border-radius: 18px; padding: 18px 16px; margin: 16px 0 10px;
-  box-shadow: 0 8px 28px rgba(20, 24, 45, .08);
-  -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); }
-.winrate-hero::before { content: ""; position: absolute; inset: -20px; pointer-events: none;
-  background:
-    radial-gradient(130px 130px at 12% 25%, rgba(52, 211, 153, .30), transparent 70%),
-    radial-gradient(150px 150px at 88% 85%, rgba(79, 107, 237, .22), transparent 70%),
-    radial-gradient(110px 110px at 72% 8%, rgba(255, 92, 92, .14), transparent 70%);
-  filter: blur(26px); }
-.winrate-hero::after { content: ""; position: absolute; right: -28px; bottom: -40px;
-  width: 150px; height: 150px; background: url("../assets/pokeball.svg") no-repeat center / contain;
-  opacity: .05; filter: grayscale(1); pointer-events: none; }
-/* Thinner ring, and the same win/loss color language as the .wr-bar
-   progress bars elsewhere on this page (mint gradient over the soft pink
-   "loss" tint) instead of an unrelated flat green, so the ring reads as
-   "the bar chart's big sibling" rather than a clashing new color. */
-.winrate-ring { position: relative; width: 104px; height: 104px; border-radius: 50%; flex: 0 0 auto;
-  background: conic-gradient(from -90deg, var(--win-ink) calc(var(--wr) * 1%), var(--loss-bg) 0);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: inset 0 0 0 1px rgba(20, 24, 45, .04), 0 4px 14px rgba(18, 161, 80, .18); }
-.winrate-ring-hole { width: 86px; height: 86px; border-radius: 50%; background: #fff;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  box-shadow: 0 1px 3px rgba(20, 24, 45, .08); }
-.winrate-ring-pct { font-size: 21px; font-weight: 800; line-height: 1; color: var(--ink); }
+   not. Percentage is drawn via conic-gradient, no chart library needed.
+   Gave up on a "hero" glass/dark treatment after two rounds of feedback
+   (felt out of place, then still looked bad even fixed) — this is now
+   just the same plain white card every other section on this page uses
+   (.order-card/.stat-tile), so the ring itself is the only thing that
+   stands out instead of fighting the card around it. */
+.winrate-hero { display: flex; align-items: center; gap: 18px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+  margin: 16px 0 10px; box-shadow: var(--shadow); }
+.winrate-ring { position: relative; width: 96px; height: 96px; border-radius: 50%; flex: 0 0 auto;
+  background: conic-gradient(from -90deg, var(--win-ink) calc(var(--wr) * 1%), var(--loss-bg) 0); }
+.winrate-ring-hole { position: absolute; inset: 10px; border-radius: 50%; background: var(--card);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.winrate-ring-pct { font-size: 20px; font-weight: 800; line-height: 1; color: var(--ink); }
 .winrate-ring-cap { font-size: 11px; color: var(--muted); margin-top: 3px; }
-.winrate-hero-side { display: flex; flex-direction: column; gap: 8px; font-size: 14px;
-  color: var(--muted); position: relative; }
+.winrate-hero-side { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--muted); }
 .winrate-hero-side b { font-size: 19px; font-weight: 800; color: var(--ink); }
 .order-card { display: flex; gap: 10px; background: var(--card); border: 1px solid var(--line);
   border-radius: 16px; padding: 14px; margin: 10px 0 6px; box-shadow: var(--shadow); }

@@ -7,7 +7,7 @@
  * card art that falls all the way through to the live pokemontcg.io
  * lookup — that always needs network, by design; see ui.js fetchCardImage).
  */
-var SHELL_V   = "tc-shell-v20";
+var SHELL_V   = "tc-shell-v21";
 var SPRITE_V  = "tc-sprites-v1";
 var CARD_V    = "tc-cards-v1";
 
