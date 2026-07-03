@@ -205,7 +205,7 @@ img { image-rendering: pixelated; }
 .decklist-head { display: flex; align-items: center; justify-content: space-between; }
 .decklist-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer;
   font-size: 16px; font-weight: 700; -webkit-tap-highlight-color: transparent; }
-.decklist-toggle-chev { display: inline-block; font-size: 12px; color: var(--muted); transition: transform .2s; }
+.decklist-toggle-chev { display: inline-block; font-size: 18px; font-weight: 700; color: var(--muted); transition: transform .2s; }
 .decklist-section.open .decklist-toggle-chev { transform: rotate(180deg); }
 .decklist-body { display: none; }
 .decklist-section.open .decklist-body { display: block; margin-top: 10px; }
@@ -401,7 +401,7 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .stat-section-toggle { display: flex; align-items: center; justify-content: space-between;
   cursor: pointer; margin: 0 0 10px; -webkit-tap-highlight-color: transparent; }
 .stat-section-toggle h3 { font-size: 16px; margin: 0; }
-.stat-section-chev { font-size: 12px; color: var(--muted); transition: transform .2s; transform: rotate(180deg); }
+.stat-section-chev { font-size: 18px; font-weight: 700; color: var(--muted); transition: transform .2s; transform: rotate(180deg); }
 .stat-section:not(.open) .stat-section-chev { transform: rotate(0deg); }
 .stat-section-body { display: block; }
 .stat-section:not(.open) .stat-section-body { display: none; }
