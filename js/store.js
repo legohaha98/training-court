@@ -40,6 +40,12 @@
   function loadTournaments() {
     return read(KEY_T).slice().sort(function (a, b) {
       return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
+    }).map(function (t) {
+      // Tournaments created before region mode existed have no region field —
+      // they were all 简中 (zh) by definition, so default at read-time
+      // rather than rewriting every stored record.
+      if (!t.region) t.region = "zh";
+      return t;
     });
   }
   function saveTournaments(list) { write(KEY_T, list); }
@@ -56,6 +62,7 @@
       placement: data.placement || "",
       deck: data.deck || [],
       decklist: data.decklist || [],
+      region: data.region || "zh",
       rounds: []
     };
     list.unshift(t);
@@ -134,24 +141,32 @@
 
   // ---- Derived ----
   // A round counts as a Win if result==="W" or special is BYE/NO_SHOW.
-  // ID counts as neither. Returns {w, l, label}.
+  // DOUBLE_LOSS (both players out of time, nobody wins — 简中 rule) counts
+  // as a loss, same bucket as a normal L. ID counts as neither. Ties (T,
+  // international Bo3 only) get their own bucket. Returns {w, l, t, label}.
+  // label stays "W-L" (no "-0" tie suffix) unless a tie has actually
+  // happened, so 简中 records render byte-identical to before ties existed.
   function computeRecord(rounds) {
-    var w = 0, l = 0;
+    var w = 0, l = 0, ties = 0;
     (rounds || []).forEach(function (r) {
       if (r.special === "ID") return;
       if (r.special === "BYE" || r.special === "NO_SHOW") { w++; return; }
+      if (r.special === "DOUBLE_LOSS") { l++; return; }
       if (r.result === "W") w++;
       else if (r.result === "L") l++;
+      else if (r.result === "T") ties++;
     });
-    return { w: w, l: l, label: w + "-" + l };
+    return { w: w, l: l, t: ties, label: w + "-" + l + (ties ? "-" + ties : "") };
   }
 
-  // outcome of a single round: "W", "L", or null (uncounted)
+  // outcome of a single round: "W", "L", "T", or null (uncounted)
   function roundOutcome(r) {
     if (r.special === "BYE" || r.special === "NO_SHOW") return "W";
+    if (r.special === "DOUBLE_LOSS") return "L";
     if (r.special === "ID") return null;
     if (r.result === "W") return "W";
     if (r.result === "L") return "L";
+    if (r.result === "T") return "T";
     return null;
   }
   function deckKey(ids) { return (ids || []).slice().sort(function (a, b) { return a - b; }).join("-"); }
@@ -160,17 +175,21 @@
   // format: optional — when given, only tournaments with that exact format
   // are included (Standard rotates, so all-time stats mix formats that
   // aren't really comparable to each other).
-  function computeStats(format) {
+  // region: optional — when given, only tournaments with that region are
+  // included, so a 简中 record never blends into an International one and
+  // vice versa (the two use different category/best-of systems entirely).
+  function computeStats(format, region) {
     var ts = loadTournaments();
     if (format) ts = ts.filter(function (t) { return t.format === format; });
+    if (region) ts = ts.filter(function (t) { return t.region === region; });
     var s = {
-      tournaments: ts.length, wins: 0, losses: 0,
+      tournaments: ts.length, wins: 0, losses: 0, ties: 0,
       firstWins: 0, firstLosses: 0, secondWins: 0, secondLosses: 0,
       decks: [], matchups: []
     };
     var decks = {}, matchups = {};
     function bucket(map, key, ids) {
-      if (!map[key]) map[key] = { key: key, ids: ids, w: 0, l: 0, tagCounts: {} };
+      if (!map[key]) map[key] = { key: key, ids: ids, w: 0, l: 0, t: 0, tagCounts: {} };
       return map[key];
     }
 
@@ -179,11 +198,11 @@
       (t.rounds || []).forEach(function (r) {
         var o = roundOutcome(r);
         if (!o) return;
-        if (o === "W") s.wins++; else s.losses++;
+        if (o === "W") s.wins++; else if (o === "L") s.losses++; else s.ties++;
         // my deck
         if (t.deck && t.deck.length) {
           var db = bucket(decks, myKey, t.deck);
-          if (o === "W") db.w++; else db.l++;
+          if (o === "W") db.w++; else if (o === "L") db.l++; else db.t++;
           // loss-reason tags are only ever set on a loss — tally them per
           // deck so "我的卡组表现" can show what tends to go wrong with
           // THIS deck specifically, not just overall win rate.
@@ -194,25 +213,31 @@
         // matchup (needs an opponent deck)
         if (r.opponentDeck && r.opponentDeck.length) {
           var mb = bucket(matchups, deckKey(r.opponentDeck), r.opponentDeck);
-          if (o === "W") mb.w++; else mb.l++;
+          if (o === "W") mb.w++; else if (o === "L") mb.l++; else mb.t++;
         }
-        // play order
-        if (r.wentFirst === true) { if (o === "W") s.firstWins++; else s.firstLosses++; }
-        else if (r.wentFirst === false) { if (o === "W") s.secondWins++; else s.secondLosses++; }
+        // play order (ties aren't attributed to either side of this split)
+        if (o !== "T") {
+          if (r.wentFirst === true) { if (o === "W") s.firstWins++; else s.firstLosses++; }
+          else if (r.wentFirst === false) { if (o === "W") s.secondWins++; else s.secondLosses++; }
+        }
       });
     });
 
+    // winRate is computed over decisive games only — a tie isn't a win or
+    // a loss, so it's excluded from the rate but still counted in `games`.
     function finish(map) {
       return Object.keys(map).map(function (k) {
-        var b = map[k]; b.games = b.w + b.l;
-        b.winRate = b.games ? Math.round(b.w / b.games * 100) : 0;
+        var b = map[k]; b.games = b.w + b.l + b.t;
+        var decisive = b.w + b.l;
+        b.winRate = decisive ? Math.round(b.w / decisive * 100) : 0;
         return b;
       }).sort(function (a, b) { return b.games - a.games || b.winRate - a.winRate; });
     }
     s.decks = finish(decks);
     s.matchups = finish(matchups);
-    s.games = s.wins + s.losses;
-    s.winRate = s.games ? Math.round(s.wins / s.games * 100) : 0;
+    s.games = s.wins + s.losses + s.ties;
+    var decisiveGames = s.wins + s.losses;
+    s.winRate = decisiveGames ? Math.round(s.wins / decisiveGames * 100) : 0;
     return s;
   }
 
@@ -330,28 +355,28 @@
   }
 
   function exportTournament(t) {
-    var ci = EXP_CATS.indexOf(t.category || ""); if (ci < 0) ci = 0;
-    var pi = EXP_PLACES.indexOf(t.placement || ""); if (pi < 0) pi = 0;
     var compact = [
       1,                        // format version
       t.name,                   // string
       t.date,                   // "YYYY-MM-DD"
-      ci,                       // category index
+      t.category || "",         // string — was an EXP_CATS index pre-region-mode, decode handles both
       t.format || "",           // string
-      pi,                       // placement index
+      t.placement || "",        // string — was an EXP_PLACES index pre-region-mode, decode handles both
       t.deck || [],             // [id, id?]
       (t.rounds || []).map(function (r) {
         return [
           (r.opponentDeck || [])[0] || 0,
           (r.opponentDeck || [])[1] || 0,
-          r.result === "W" ? 0 : 1,
+          r.result === "W" ? 0 : r.result === "T" ? 2 : 1,
           r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
-          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0,
+          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : 0,
           r.note || "",            // index 5, added after round notes existed
-          _encodeTags(r.tags)       // index 6, added after loss-reason tags existed
+          _encodeTags(r.tags),      // index 6, added after loss-reason tags existed
+          r.bestOf || 1             // index 7, added after region mode existed
         ];
       }),
-      _encodeDecklist(t.decklist)   // index 8, added after decklists existed — absent in older codes
+      _encodeDecklist(t.decklist),  // index 8, added after decklists existed — absent in older codes
+      t.region || "zh"              // index 9, added after region mode existed
     ];
     return _encode(JSON.stringify(compact));   // returns a Promise<string>
   }
@@ -364,23 +389,25 @@
         return {
           name: compact[1] || "Imported",
           date: compact[2] || new Date().toISOString().slice(0, 10),
-          category: EXP_CATS[compact[3]] || "",
+          category: typeof compact[3] === "number" ? (EXP_CATS[compact[3]] || "") : (compact[3] || ""),
           format: compact[4] || "",
-          placement: EXP_PLACES[compact[5]] || "",
+          placement: typeof compact[5] === "number" ? (EXP_PLACES[compact[5]] || "") : (compact[5] || ""),
           deck: compact[6] || [],
           rounds: (compact[7] || []).map(function (r, i) {
             return {
               id: uid(),
               number: i + 1,
               opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
-              result: r[2] === 0 ? "W" : "L",
+              result: r[2] === 0 ? "W" : r[2] === 2 ? "T" : "L",
               wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
+              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : "",
               note: r[5] || "",
-              tags: _decodeTags(r[6])
+              tags: _decodeTags(r[6]),
+              bestOf: r[7] || 1
             };
           }),
-          decklist: _decodeDecklist(compact[8])
+          decklist: _decodeDecklist(compact[8]),
+          region: compact[9] || "zh"
         };
       } catch (e) { return null; }
     }).catch(function () { return null; });   // returns a Promise<data|null>
@@ -447,22 +474,22 @@
   function exportAllTournaments() {
     var ts = loadTournaments();
     var bundle = ts.map(function (t) {
-      var ci = EXP_CATS.indexOf(t.category || ""); if (ci < 0) ci = 0;
-      var pi = EXP_PLACES.indexOf(t.placement || ""); if (pi < 0) pi = 0;
       return [
-        t.name, t.date, ci, t.format || "", pi, t.deck || [],
+        t.name, t.date, t.category || "", t.format || "", t.placement || "", t.deck || [],
         (t.rounds || []).map(function (r) {
           return [
             (r.opponentDeck || [])[0] || 0,
             (r.opponentDeck || [])[1] || 0,
-            r.result === "W" ? 0 : 1,
+            r.result === "W" ? 0 : r.result === "T" ? 2 : 1,
             r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
-            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0,
+            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : 0,
             r.note || "",            // index 5, added after round notes existed
-            _encodeTags(r.tags)      // index 6, added after loss-reason tags existed
+            _encodeTags(r.tags),     // index 6, added after loss-reason tags existed
+            r.bestOf || 1            // index 7, added after region mode existed
           ];
         }),
-        _encodeDecklist(t.decklist)   // index 7, added after decklists existed — absent in older codes
+        _encodeDecklist(t.decklist),  // index 7, added after decklists existed — absent in older codes
+        t.region || "zh"              // index 8, added after region mode existed
       ];
     });
     return _encode(JSON.stringify(["ALL1", bundle]));   // returns a Promise<string>
@@ -477,23 +504,25 @@
           return {
             name: c[0] || "Imported",
             date: c[1] || new Date().toISOString().slice(0, 10),
-            category: EXP_CATS[c[2]] || "",
+            category: typeof c[2] === "number" ? (EXP_CATS[c[2]] || "") : (c[2] || ""),
             format: c[3] || "",
-            placement: EXP_PLACES[c[4]] || "",
+            placement: typeof c[4] === "number" ? (EXP_PLACES[c[4]] || "") : (c[4] || ""),
             deck: c[5] || [],
             rounds: (c[6] || []).map(function (r, i) {
               return {
                 id: uid(),
                 number: i + 1,
                 opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
-                result: r[2] === 0 ? "W" : "L",
+                result: r[2] === 0 ? "W" : r[2] === 2 ? "T" : "L",
                 wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-                special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
+                special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : "",
                 note: r[5] || "",
-                tags: _decodeTags(r[6])
+                tags: _decodeTags(r[6]),
+                bestOf: r[7] || 1
               };
             }),
-            decklist: _decodeDecklist(c[7])
+            decklist: _decodeDecklist(c[7]),
+            region: c[8] || "zh"
           };
         });
       } catch (e) { return null; }

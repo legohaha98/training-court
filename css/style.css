@@ -222,6 +222,7 @@ img { image-rendering: pixelated; }
 .round-row .res { font-weight: 800; font-size: 15px; flex: 0 0 auto; }
 .round-row.win .res { color: var(--win-ink); }
 .round-row.loss .res { color: var(--loss-ink); }
+.round-row.tie .res { color: var(--muted); }
 .round-row .del { color: var(--faint); font-size: 14px; padding: 4px; flex: 0 0 auto; }
 .round-row .del:active { color: var(--loss-ink); }
 .order-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px;

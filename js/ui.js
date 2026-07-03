@@ -19,6 +19,10 @@
   var byId = {};
   (window.POKEMON || []).forEach(function (p) { byId[p.id] = p; });
 
+  // ui.js loads before app.js and has no other dependency on it, so it reads
+  // the region setting directly rather than sharing app.js's getRegion().
+  function isEn() { return localStorage.getItem("tc.region") === "en"; }
+
   // bump SPRITE_V whenever the sprite files change, to bust the browser image cache
   var SPRITE_V = "4";
   function spriteUrl(id) { return "assets/sprites/" + id + ".png?v=" + SPRITE_V; }
@@ -129,7 +133,7 @@
           }
         }));
       } else {
-        box.appendChild(el("span", { class: "nm" }, ["选择宝可梦…"]));
+        box.appendChild(el("span", { class: "nm" }, [isEn() ? "Choose a Pokémon…" : "选择宝可梦…"]));
         box.appendChild(el("span", { html: "&#9662;", style: "opacity:.45" }));
       }
       box.addEventListener("click", openSheet);
@@ -148,13 +152,13 @@
       // header row: title + close button
       var header = el("div", { class: "picker-sheet-head" }, [
         el("div", { class: "picker-sheet-grip" }),
-        el("div", { class: "picker-sheet-title" }, ["选择宝可梦"]),
+        el("div", { class: "picker-sheet-title" }, [isEn() ? "Choose a Pokémon" : "选择宝可梦"]),
         el("button", { class: "picker-sheet-close", html: "&times;", onclick: closeSheet })
       ]);
 
       // sticky search bar
       var searchWrap = el("div", { class: "picker-search-wrap" });
-      var searchEl = el("input", { class: "picker-search-input", placeholder: "搜索…",
+      var searchEl = el("input", { class: "picker-search-input", placeholder: isEn() ? "Search…" : "搜索…",
         oninput: function () { renderList(this.value); } });
       searchWrap.appendChild(searchEl);
 
@@ -172,7 +176,7 @@
           return chip;
         }));
         freqWrap = el("div", { class: "picker-freq-wrap" }, [
-          el("div", { class: "picker-freq-label" }, ["常用"]),
+          el("div", { class: "picker-freq-label" }, [isEn() ? "Frequent" : "常用"]),
           freqRow
         ]);
       }
