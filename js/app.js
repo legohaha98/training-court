@@ -18,6 +18,15 @@
   }
   function specialText(s) { return s === "BYE" ? "轮空" : s === "NO_SHOW" ? "对手弃赛" : ""; }
 
+  // Solid collapse-toggle chevron — same triangle shape as the .select
+  // dropdown arrow (same <path d>), just drawn bigger via width/height so
+  // it reads at a glance instead of relying on a font glyph that renders
+  // thin/inconsistently across platforms.
+  function chevSvg(cls) {
+    return el("span", { class: cls,
+      html: "<svg width=\"20\" height=\"14\" viewBox=\"0 0 12 8\" fill=\"currentColor\"><path d=\"M6 8 0 0h12z\"/></svg>" });
+  }
+
   function fmtDate(iso) {
     if (!iso) return "";
     var d = new Date(iso + "T00:00:00");
@@ -423,7 +432,7 @@
 
     var toggle = el("div", { class: "decklist-toggle" }, [
       el("span", {}, ["卡组 · 共 " + totalCards + " 张"]),
-      el("span", { class: "decklist-toggle-chev" }, ["▾"])
+      chevSvg("decklist-toggle-chev")
     ]);
     toggle.addEventListener("click", function () {
       var open = wrap.classList.toggle("open");
@@ -619,7 +628,7 @@
       var sec = el("div", { class: "stat-section open" });
       var toggle = el("div", { class: "stat-section-toggle" }, [
         el("h3", {}, [title]),
-        el("span", { class: "stat-section-chev" }, ["▾"])
+        chevSvg("stat-section-chev")
       ]);
       toggle.addEventListener("click", function () { sec.classList.toggle("open"); });
       sec.appendChild(toggle);
