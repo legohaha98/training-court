@@ -39,7 +39,17 @@ img { image-rendering: pixelated; }
   position: relative;
   width: 100%;
   max-width: 440px;
-  min-height: 100vh;
+  /* height, not min-height: this must be a hard cap, not a floor. With
+     min-height, .phone was free to grow taller than the viewport as the
+     tournament list got longer, which defeats .content's flex:1 +
+     overflow-y:auto (a flex item only scrolls internally if its container
+     has a bounded height) — the whole page grew instead, pushing the
+     absolutely-positioned .tabbar further down with it, so more data meant
+     scrolling further to reach 锦标赛/数据. dvh (falls back to vh where
+     unsupported) also avoids the "100vh taller than the visible mobile
+     Safari viewport" issue. */
+  height: 100vh;
+  height: 100dvh;
   background: var(--bg);
   display: flex;
   flex-direction: column;
@@ -47,7 +57,7 @@ img { image-rendering: pixelated; }
 }
 @media (min-width: 540px) {
   #app { padding: 22px 0; align-items: flex-start; }
-  .phone { min-height: calc(100vh - 44px); border-radius: 30px; overflow: hidden; }
+  .phone { height: calc(100vh - 44px); height: calc(100dvh - 44px); border-radius: 30px; overflow: hidden; }
 }
 
 /* ---- top bar ---- */
