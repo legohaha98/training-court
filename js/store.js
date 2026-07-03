@@ -55,6 +55,7 @@
       format: data.format || "",
       placement: data.placement || "",
       deck: data.deck || [],
+      decklist: data.decklist || [],
       rounds: []
     };
     list.unshift(t);
@@ -248,6 +249,53 @@
       return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(""));
   }
+  function _bytesToB64(bytes) {
+    var binary = "";
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+  function _b64ToBytes(b64) {
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  /*
+   * Export codes are gzip-compressed before Base64 (roughly halves the
+   * length for a real multi-tournament backup with decklists — plain JSON
+   * is very repetitive, lots of recurring card names). Falls back to the
+   * plain (uncompressed) Base64 scheme above when CompressionStream isn't
+   * available, and _decode always tries gzip first then falls back to
+   * plain decode on failure — so codes made on an old/new browser both
+   * still import fine either way, no version marker needed.
+   */
+  function _encode(str) {
+    if (typeof CompressionStream === "undefined") return Promise.resolve(_b64enc(str));
+    var cs = new CompressionStream("gzip");
+    var writer = cs.writable.getWriter();
+    writer.write(new TextEncoder().encode(str));
+    writer.close();
+    return new Response(cs.readable).arrayBuffer().then(function (buf) {
+      return _bytesToB64(new Uint8Array(buf));
+    });
+  }
+  function _decode(b64) {
+    if (typeof DecompressionStream === "undefined") return Promise.resolve(_b64dec(b64));
+    var bytes;
+    try { bytes = _b64ToBytes(b64.trim()); } catch (e) { return Promise.resolve(_b64dec(b64)); }
+    var ds = new DecompressionStream("gzip");
+    var writer = ds.writable.getWriter();
+    // A garbage/non-gzip paste (or a pre-compression plain code) makes the
+    // writable side reject too, not just the readable side below — catch it
+    // here as well, or some browsers log it as an extra unhandled rejection
+    // even though we handle the failure correctly via the .catch() below.
+    writer.write(bytes).catch(function () {});
+    writer.close().catch(function () {});
+    return new Response(ds.readable).arrayBuffer()
+      .then(function (buf) { return new TextDecoder().decode(buf); })
+      .catch(function () { return _b64dec(b64); });
+  }
 
   // Decklist compact encode/decode, shared by exportTournament/exportAllTournaments.
   var DECK_CATS = ["pokemon", "trainer", "energy"];
@@ -285,34 +333,36 @@
       }),
       _encodeDecklist(t.decklist)   // index 8, added after decklists existed — absent in older codes
     ];
-    return _b64enc(JSON.stringify(compact));
+    return _encode(JSON.stringify(compact));   // returns a Promise<string>
   }
 
   function importTournament(code) {
-    try {
-      var compact = JSON.parse(_b64dec(code.trim()));
-      if (!Array.isArray(compact) || compact[0] !== 1) return null;
-      return {
-        name: compact[1] || "Imported",
-        date: compact[2] || new Date().toISOString().slice(0, 10),
-        category: EXP_CATS[compact[3]] || "",
-        format: compact[4] || "",
-        placement: EXP_PLACES[compact[5]] || "",
-        deck: compact[6] || [],
-        rounds: (compact[7] || []).map(function (r, i) {
-          return {
-            id: uid(),
-            number: i + 1,
-            opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
-            result: r[2] === 0 ? "W" : "L",
-            wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-            special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
-            note: r[5] || ""
-          };
-        }),
-        decklist: _decodeDecklist(compact[8])
-      };
-    } catch (e) { return null; }
+    return _decode(code.trim()).then(function (json) {
+      try {
+        var compact = JSON.parse(json);
+        if (!Array.isArray(compact) || compact[0] !== 1) return null;
+        return {
+          name: compact[1] || "Imported",
+          date: compact[2] || new Date().toISOString().slice(0, 10),
+          category: EXP_CATS[compact[3]] || "",
+          format: compact[4] || "",
+          placement: EXP_PLACES[compact[5]] || "",
+          deck: compact[6] || [],
+          rounds: (compact[7] || []).map(function (r, i) {
+            return {
+              id: uid(),
+              number: i + 1,
+              opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
+              result: r[2] === 0 ? "W" : "L",
+              wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
+              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
+              note: r[5] || ""
+            };
+          }),
+          decklist: _decodeDecklist(compact[8])
+        };
+      } catch (e) { return null; }
+    }).catch(function () { return null; });   // returns a Promise<data|null>
   }
 
   /*
@@ -393,36 +443,38 @@
         _encodeDecklist(t.decklist)   // index 7, added after decklists existed — absent in older codes
       ];
     });
-    return _b64enc(JSON.stringify(["ALL1", bundle]));
+    return _encode(JSON.stringify(["ALL1", bundle]));   // returns a Promise<string>
   }
 
   function importAllTournaments(code) {
-    try {
-      var outer = JSON.parse(_b64dec(code.trim()));
-      if (!Array.isArray(outer) || outer[0] !== "ALL1") return null;
-      return outer[1].map(function (c) {
-        return {
-          name: c[0] || "Imported",
-          date: c[1] || new Date().toISOString().slice(0, 10),
-          category: EXP_CATS[c[2]] || "",
-          format: c[3] || "",
-          placement: EXP_PLACES[c[4]] || "",
-          deck: c[5] || [],
-          rounds: (c[6] || []).map(function (r, i) {
-            return {
-              id: uid(),
-              number: i + 1,
-              opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
-              result: r[2] === 0 ? "W" : "L",
-              wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
-              note: r[5] || ""
-            };
-          }),
-          decklist: _decodeDecklist(c[7])
-        };
-      });
-    } catch (e) { return null; }
+    return _decode(code.trim()).then(function (json) {
+      try {
+        var outer = JSON.parse(json);
+        if (!Array.isArray(outer) || outer[0] !== "ALL1") return null;
+        return outer[1].map(function (c) {
+          return {
+            name: c[0] || "Imported",
+            date: c[1] || new Date().toISOString().slice(0, 10),
+            category: EXP_CATS[c[2]] || "",
+            format: c[3] || "",
+            placement: EXP_PLACES[c[4]] || "",
+            deck: c[5] || [],
+            rounds: (c[6] || []).map(function (r, i) {
+              return {
+                id: uid(),
+                number: i + 1,
+                opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
+                result: r[2] === 0 ? "W" : "L",
+                wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
+                special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
+                note: r[5] || ""
+              };
+            }),
+            decklist: _decodeDecklist(c[7])
+          };
+        });
+      } catch (e) { return null; }
+    }).catch(function () { return null; });   // returns a Promise<list|null>
   }
 
   window.Store = {

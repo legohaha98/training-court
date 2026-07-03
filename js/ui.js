@@ -38,8 +38,11 @@
 
   /* Card-art lookup for decklist cards. Tries, in order:
    *   1. the locally bundled image at its own (set,number) key
-   *      (web/assets/cards/<SET>-<NUMBER>.png — downloaded ahead of time by
-   *      shared/fetch-card-images.mjs);
+   *      (web/assets/cards/<SET>-<NUMBER>.webp — downloaded as .png by
+   *      shared/fetch-card-images.mjs, then re-encoded to .webp by
+   *      shared/compress-cards.py, ~80% smaller with no visible quality
+   *      loss; probeLocalCard tries .webp first, falling back to .png for
+   *      any freshly-downloaded card that hasn't been compressed yet);
    *   2. the same NAME's bundled art under a different (set,number) — cards
    *      are deduped by name (Ultra Ball from any set is the same card, a
    *      basic Energy only differs by type, not printing), see
@@ -67,17 +70,22 @@
       img.src = url;
     });
   }
+  function probeLocalCard(key) {
+    return probeImage("assets/cards/" + key + ".webp").then(function (url) {
+      return url || probeImage("assets/cards/" + key + ".png");
+    });
+  }
   function fetchCardImage(set, number, name) {
     if (!set || !number) return Promise.resolve(null);
     var key = set + "|" + number;
     if (Object.prototype.hasOwnProperty.call(_cardImgCache, key)) return Promise.resolve(_cardImgCache[key]);
-    return probeImage("assets/cards/" + set + "-" + number + ".png").then(function (localUrl) {
+    return probeLocalCard(set + "-" + number).then(function (localUrl) {
       if (localUrl) { _cardImgCache[key] = localUrl; return localUrl; }
       if (!name) return liveLookup();
       return loadCardNameIndex().then(function (index) {
         var aliasKey = index[name];
         if (!aliasKey) return liveLookup();
-        return probeImage("assets/cards/" + aliasKey + ".png").then(function (aliasUrl) {
+        return probeLocalCard(aliasKey).then(function (aliasUrl) {
           if (aliasUrl) { _cardImgCache[key] = aliasUrl; return aliasUrl; }
           return liveLookup();
         });
