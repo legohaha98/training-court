@@ -170,7 +170,7 @@
     };
     var decks = {}, matchups = {};
     function bucket(map, key, ids) {
-      if (!map[key]) map[key] = { key: key, ids: ids, w: 0, l: 0 };
+      if (!map[key]) map[key] = { key: key, ids: ids, w: 0, l: 0, tagCounts: {} };
       return map[key];
     }
 
@@ -184,6 +184,12 @@
         if (t.deck && t.deck.length) {
           var db = bucket(decks, myKey, t.deck);
           if (o === "W") db.w++; else db.l++;
+          // loss-reason tags are only ever set on a loss — tally them per
+          // deck so "我的卡组表现" can show what tends to go wrong with
+          // THIS deck specifically, not just overall win rate.
+          if (o === "L" && r.tags && r.tags.length) {
+            r.tags.forEach(function (tag) { db.tagCounts[tag] = (db.tagCounts[tag] || 0) + 1; });
+          }
         }
         // matchup (needs an opponent deck)
         if (r.opponentDeck && r.opponentDeck.length) {
@@ -238,6 +244,13 @@
    */
   var EXP_CATS   = ["", "店赛", "城市赛", "超级赛", "高级赛", "大师赛", "世界赛", "线上对战", "其他"];
   var EXP_PLACES = ["", "冠军", "亚军", "四强", "八强", "十六强", "三十二强", "六十四强"];
+  // Loss-reason tags a round can carry (only meaningful on a loss). Order is
+  // fixed so codes can store them as small indices. The first four are
+  // "skill" tags attributable to how this deck was piloted — computeStats
+  // tallies those per-deck; the last two (bad draw, opponent variance)
+  // aren't the player's fault, so they're just recorded, not aggregated.
+  var ROUND_TAG_KEYS = ["resource", "sequencing", "matchup_knowledge", "tempo", "bad_draw", "opp_luck"];
+  var ROUND_SKILL_TAG_KEYS = ["resource", "sequencing", "matchup_knowledge", "tempo"];
 
   function _b64enc(str) {
     return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (_, p) {
@@ -309,6 +322,12 @@
       return { category: DECK_CATS[c[0]] || "pokemon", count: c[1] || 1, name: c[2] || "", set: c[3] || "", number: c[4] || "" };
     });
   }
+  function _encodeTags(tags) {
+    return (tags || []).map(function (tag) { return ROUND_TAG_KEYS.indexOf(tag); }).filter(function (i) { return i >= 0; });
+  }
+  function _decodeTags(arr) {
+    return (arr || []).map(function (i) { return ROUND_TAG_KEYS[i]; }).filter(Boolean);
+  }
 
   function exportTournament(t) {
     var ci = EXP_CATS.indexOf(t.category || ""); if (ci < 0) ci = 0;
@@ -328,7 +347,8 @@
           r.result === "W" ? 0 : 1,
           r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
           r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0,
-          r.note || ""            // index 5, added after round notes existed
+          r.note || "",            // index 5, added after round notes existed
+          _encodeTags(r.tags)       // index 6, added after loss-reason tags existed
         ];
       }),
       _encodeDecklist(t.decklist)   // index 8, added after decklists existed — absent in older codes
@@ -356,7 +376,8 @@
               result: r[2] === 0 ? "W" : "L",
               wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
               special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
-              note: r[5] || ""
+              note: r[5] || "",
+              tags: _decodeTags(r[6])
             };
           }),
           decklist: _decodeDecklist(compact[8])
@@ -437,7 +458,8 @@
             r.result === "W" ? 0 : 1,
             r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
             r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : 0,
-            r.note || ""            // index 5, added after round notes existed
+            r.note || "",            // index 5, added after round notes existed
+            _encodeTags(r.tags)      // index 6, added after loss-reason tags existed
           ];
         }),
         _encodeDecklist(t.decklist)   // index 7, added after decklists existed — absent in older codes
@@ -467,7 +489,8 @@
                 result: r[2] === 0 ? "W" : "L",
                 wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
                 special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : "",
-                note: r[5] || ""
+                note: r[5] || "",
+                tags: _decodeTags(r[6])
               };
             }),
             decklist: _decodeDecklist(c[7])
@@ -488,6 +511,7 @@
     exportTournament: exportTournament, importTournament: importTournament,
     exportAllTournaments: exportAllTournaments, importAllTournaments: importAllTournaments,
     parseDecklistText: parseDecklistText, formatDecklistText: formatDecklistText,
+    ROUND_TAG_KEYS: ROUND_TAG_KEYS, ROUND_SKILL_TAG_KEYS: ROUND_SKILL_TAG_KEYS,
     isStorageOk: function () { return STORAGE_OK; }
   };
 })();

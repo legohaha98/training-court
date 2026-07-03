@@ -226,11 +226,16 @@
               var newRec = S.computeRecord(t.rounds); main.querySelector(".big-rec").textContent = newRec.label;
             } })
         ]);
-        if (r.note) {
-          rounds.appendChild(el("div", { class: "round-item" }, [
-            roundRow,
-            el("div", { class: "round-note" }, [r.note])
-          ]));
+        var extras = [];
+        if (r.tags && r.tags.length) {
+          extras.push(el("div", { class: "round-tags" }, r.tags.map(function (key) {
+            var tag = LOSS_TAGS.filter(function (lt) { return lt.key === key; })[0];
+            return tag ? el("span", { class: "tag-chip" }, [tag.label]) : null;
+          })));
+        }
+        if (r.note) extras.push(el("div", { class: "round-note" }, [r.note]));
+        if (extras.length) {
+          rounds.appendChild(el("div", { class: "round-item" }, [roundRow].concat(extras)));
         } else {
           rounds.appendChild(roundRow);
         }
@@ -258,6 +263,19 @@
     main.appendChild(renderDecklistSection(t));
   }
 
+  // Loss-reason tags — only meaningful on a loss. First four are "skill"
+  // tags attributable to this deck's piloting (computeStats tallies those
+  // per-deck, see S.ROUND_SKILL_TAG_KEYS); the last two are variance, not
+  // the player's fault, so they're recorded but not aggregated anywhere.
+  var LOSS_TAGS = [
+    { key: "resource", label: "资源规划失误" },
+    { key: "sequencing", label: "出牌顺序失误" },
+    { key: "matchup_knowledge", label: "对位知识不足" },
+    { key: "tempo", label: "超时/节奏问题" },
+    { key: "bad_draw", label: "卡手/奖励卡问题" },
+    { key: "opp_luck", label: "对手高掷" }
+  ];
+
   // inline add/edit-round form
   // existing=null -> add new;  existing=round object -> edit that round
   // done(patch) called with the data object on save, or done(null) on cancel
@@ -265,21 +283,38 @@
     var draft = existing
       ? { opponentDeck: [(existing.opponentDeck||[])[0]||null, (existing.opponentDeck||[])[1]||null],
           result: existing.result || "W", wentFirst: existing.wentFirst !== undefined ? existing.wentFirst : null,
-          special: existing.special || "", note: existing.note || "" }
-      : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "", note: "" };
+          special: existing.special || "", note: existing.note || "", tags: (existing.tags || []).slice() }
+      : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "", note: "", tags: [] };
 
     var resultSeg = el("div", { class: "seg" }, ["W", "L"].map(function (v) {
-      return el("div", { class: "opt", "data-v": v, onclick: function () { draft.result = v; draft.special = ""; sync(); } },
-        [v === "W" ? "胜" : "负"]);
+      return el("div", { class: "opt", "data-v": v, onclick: function () {
+        draft.result = v; draft.special = "";
+        if (v !== "L") draft.tags = [];   // loss-reason tags don't make sense on a win
+        sync();
+      } }, [v === "W" ? "胜" : "负"]);
     }));
     var orderSeg = el("div", { class: "seg small" }, [["先手", true], ["后手", false]].map(function (o) {
       return el("div", { class: "opt", onclick: function () { draft.wentFirst = (draft.wentFirst === o[1]) ? null : o[1]; sync(); } }, [o[0]]);
     }));
     var outcomeSeg = el("div", { class: "seg small" }, [["轮空", "BYE"], ["对手弃赛", "NO_SHOW"]].map(function (o) {
       return el("div", { class: "opt", onclick: function () {
-        draft.special = draft.special === o[1] ? "" : o[1]; sync();
+        draft.special = draft.special === o[1] ? "" : o[1];
+        if (draft.special) draft.tags = [];   // BYE/NO_SHOW count as a win, not a real loss
+        sync();
       } }, [o[0]]);
     }));
+    var tagChips = LOSS_TAGS.map(function (tag) {
+      var chip = el("div", { class: "opt", onclick: function () {
+        var i = draft.tags.indexOf(tag.key);
+        if (i >= 0) draft.tags.splice(i, 1); else draft.tags.push(tag.key);
+        sync();
+      } }, [tag.label]);
+      return chip;
+    });
+    var tagWrap = el("div", {}, [
+      el("label", { class: "lbl" }, ["输的原因（可多选，可选）"]),
+      el("div", { class: "seg small tag-seg" }, tagChips)
+    ]);
 
     var deckRow = el("div", { class: "two-col" }, [
       UI.PokemonPicker({ value: draft.opponentDeck[0], onChange: function (id) { draft.opponentDeck[0] = id; } }),
@@ -296,6 +331,10 @@
       var so = outcomeSeg.children;
       so[0].className = "opt" + (draft.special === "BYE" ? " sel" : "");
       so[1].className = "opt" + (draft.special === "NO_SHOW" ? " sel" : "");
+      LOSS_TAGS.forEach(function (tag, i) {
+        tagChips[i].className = "opt" + (draft.tags.indexOf(tag.key) >= 0 ? " sel" : "");
+      });
+      tagWrap.style.display = (draft.result === "L" && !draft.special) ? "" : "none";
     }
     sync();
 
@@ -309,6 +348,7 @@
       orderSeg,
       el("label", { class: "lbl" }, ["其他结果"]),
       outcomeSeg,
+      tagWrap,
       el("label", { class: "lbl" }, ["备注（复盘用，可选）"]),
       el("textarea", { class: "note-input", placeholder: "比如：对面缺能量、关键卡没抽到…",
         oninput: function () { draft.note = this.value; } }, [draft.note]),
@@ -316,7 +356,8 @@
         el("button", { class: "btn btn-ghost", onclick: function () { done(null); } }, ["取消"]),
         el("button", { class: "btn btn-primary", onclick: function () {
           done({ result: draft.result, wentFirst: draft.wentFirst, special: draft.special,
-            opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim() });
+            opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim(),
+            tags: draft.tags });
         } }, [existing ? "保存" : "添加"])
       ])
     ]);
@@ -523,26 +564,38 @@
       ])
     ]));
 
-    function statRow(item) {
+    function statRow(item, showTags) {
       var icon = item.ids.length
         ? deckSprites(item.ids)
         : el("span", { style: "color:var(--faint);font-size:13px" }, ["未设置卡组"]);
+      var mid = [
+        el("div", { class: "sr-rec" }, [item.w + "胜 " + item.l + "负 · 共 " + item.games + " 局"]),
+        el("div", { class: "wr-bar" }, [el("i", { style: "width:" + item.winRate + "%" })])
+      ];
+      if (showTags && item.tagCounts) {
+        var breakdown = S.ROUND_SKILL_TAG_KEYS
+          .map(function (key) { return { key: key, n: item.tagCounts[key] || 0 }; })
+          .filter(function (x) { return x.n > 0; })
+          .sort(function (a, b) { return b.n - a.n; })
+          .map(function (x) {
+            var tag = LOSS_TAGS.filter(function (lt) { return lt.key === x.key; })[0];
+            return (tag ? tag.label : x.key) + " ×" + x.n;
+          });
+        if (breakdown.length) mid.push(el("div", { class: "sr-tags" }, ["常见失误：" + breakdown.join("、")]));
+      }
       return el("div", { class: "stat-row" }, [
         el("div", { class: "icon-wrap" }, [icon]),
-        el("div", { class: "sr-mid" }, [
-          el("div", { class: "sr-rec" }, [item.w + "胜 " + item.l + "负 · 共 " + item.games + " 局"]),
-          el("div", { class: "wr-bar" }, [el("i", { style: "width:" + item.winRate + "%" })])
-        ]),
+        el("div", { class: "sr-mid" }, mid),
         el("div", { class: "sr-wr" }, [item.winRate + "%"])
       ]);
     }
-    function section(title, list) {
+    function section(title, list, showTags) {
       var sec = el("div", { class: "stat-section" }, [el("h3", {}, [title])]);
       if (!list.length) sec.appendChild(el("div", { class: "empty", style: "padding:18px" }, ["暂无数据"]));
-      else list.forEach(function (it) { sec.appendChild(statRow(it)); });
+      else list.forEach(function (it) { sec.appendChild(statRow(it, showTags)); });
       return sec;
     }
-    main.appendChild(section("我的卡组表现", s.decks));
+    main.appendChild(section("我的卡组表现", s.decks, true));
     main.appendChild(section("对位统计（对手卡组）", s.matchups));
   }
 
