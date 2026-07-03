@@ -34,7 +34,14 @@
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   // ---- Tournaments ----
-  function loadTournaments() { return read(KEY_T); }
+  // Always newest-date-first, regardless of creation/import order — addTournament
+  // just unshifts (newest-CREATED first), which drifts from date order the moment
+  // tournaments are added out of chronological order or restored from a backup.
+  function loadTournaments() {
+    return read(KEY_T).slice().sort(function (a, b) {
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
+    });
+  }
   function saveTournaments(list) { write(KEY_T, list); }
   function getTournament(id) { return loadTournaments().filter(function (t) { return t.id === id; })[0]; }
 
