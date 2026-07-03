@@ -36,6 +36,19 @@
 
   var main;
 
+  // Lighter alternative to a native <select> for the 赛制 filter: a row of
+  // tappable pill buttons ("全部赛制" + one per distinct format seen in the data).
+  function pillFilter(allLabel, options, active, onSelect) {
+    var values = [""].concat(options);
+    return el("div", { class: "pill-filter" }, values.map(function (v) {
+      return el("button", {
+        type: "button",
+        class: "pill" + (active === v ? " active" : ""),
+        onclick: function () { onSelect(v); }
+      }, [v === "" ? allLabel : v]);
+    }));
+  }
+
   function emptyState(title, copy, compact) {
     return el("div", { class: "empty" + (compact ? " empty-compact" : "") }, [
       el("img", { class: "empty-ball", src: "assets/pokeball.svg", alt: "" }),
@@ -64,11 +77,8 @@
       [el("option", { value: "" }, ["全部分类"])].concat(CATEGORIES.map(function (c) {
         return el("option", { value: c, selected: listFilters.category === c ? "selected" : null }, [c]);
       })));
-    var fmtSel = el("select", { class: "select", onchange: function () { listFilters.format = this.value; renderList(); } },
-      [el("option", { value: "" }, ["全部赛制"])].concat(formats.map(function (f) {
-        return el("option", { value: f, selected: listFilters.format === f ? "selected" : null }, [f]);
-      })));
-    main.appendChild(el("div", { class: "filters" }, [catSel, fmtSel]));
+    var fmtPills = pillFilter("全部赛制", formats, listFilters.format, function (v) { listFilters.format = v; renderList(); });
+    main.appendChild(el("div", { class: "filters" }, [catSel, fmtPills]));
 
     var filtered = all.filter(function (t) {
       return (!listFilters.category || t.category === listFilters.category) &&
@@ -421,7 +431,11 @@
       imagePromise = UI.fetchCardImage(c.set, c.number, c.name).then(function (url) {
         if (!url) return;
         var img = el("img", { src: url, alt: c.name, class: "decklist-card-img" });
-        img.addEventListener("load", function () { art.innerHTML = ""; art.appendChild(img); tile.classList.add("has-img"); });
+        img.addEventListener("load", function () {
+          art.innerHTML = "";
+          art.appendChild(img);
+          requestAnimationFrame(function () { tile.classList.add("has-img"); });
+        });
         return url;
       });
     }
@@ -594,12 +608,8 @@
     var formats = S.loadTournaments().map(function (t) { return t.format; })
       .filter(function (f, i, a) { return f && a.indexOf(f) === i; });
     if (formats.length > 1) {
-      var fmtSel = el("select", { class: "select", onchange: function () { statsFormatFilter = this.value; renderStats(); } },
-        [el("option", { value: "", selected: statsFormatFilter === "" ? "selected" : null }, ["全部赛制"])].concat(
-          formats.map(function (f) {
-            return el("option", { value: f, selected: statsFormatFilter === f ? "selected" : null }, [f]);
-          })));
-      main.appendChild(el("div", { class: "filters" }, [fmtSel]));
+      var fmtPills = pillFilter("全部赛制", formats, statsFormatFilter, function (v) { statsFormatFilter = v; renderStats(); });
+      main.appendChild(el("div", { class: "filters" }, [fmtPills]));
     } else {
       statsFormatFilter = "";
     }

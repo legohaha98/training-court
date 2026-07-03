@@ -103,7 +103,8 @@ img { image-rendering: pixelated; }
 .row-actions .btn { flex: 1; }
 
 /* ---- filters ---- */
-.filters { display: flex; gap: 10px; margin: 16px 0; }
+.filters { display: flex; gap: 10px; margin: 16px 0; align-items: center; }
+.filters .select { width: auto; flex: 0 0 auto; min-width: 118px; }
 .select, .input {
   width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: 13px;
   background: #fff; font-size: 14px; color: var(--ink); font-family: inherit;
@@ -113,6 +114,18 @@ img { image-rendering: pixelated; }
   background-repeat: no-repeat; background-position: right 14px center; padding-right: 34px; }
 .input:focus, .select:focus { outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(79, 107, 237, .12); }
+
+/* ---- pill filter (lighter alternative to a native <select>, used for 赛制) ---- */
+.pill-filter { display: flex; gap: 8px; flex: 1; min-width: 0; overflow-x: auto;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 2px 1px; }
+.pill-filter::-webkit-scrollbar { display: none; }
+.pill-filter .pill { flex: 0 0 auto; padding: 9px 15px; border-radius: 999px;
+  border: 1px solid var(--line); background: #fff; color: #4b5160;
+  font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer;
+  white-space: nowrap; -webkit-tap-highlight-color: transparent;
+  transition: background .12s, color .12s, border-color .12s; }
+.pill-filter .pill:active { transform: scale(.97); }
+.pill-filter .pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* ---- sprites (object-fit: contain keeps pixel art from stretching) ---- */
 .deck-sprites { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
@@ -157,6 +170,25 @@ img { image-rendering: pixelated; }
 .detail-tools .tool:active { background: #f3f4f8; }
 .detail-tools .tool img { width: 18px; height: 18px; display: block;
   object-fit: contain; image-rendering: auto; }
+
+/* Unified feedback for icon-led controls: one visual weight, one press rhythm. */
+.back-btn, .detail-tools .tool, .round-row .edit, .card-view-close,
+.decklist-toggle, .stat-section-toggle, .tabbar a {
+  transition: transform .1s ease, background-color .12s ease, opacity .12s ease;
+}
+.back-btn img, .detail-tools .tool img, .round-row .edit img,
+.decklist-toggle-chev, .stat-section-chev, .tabbar a .ic {
+  transition: transform .12s ease, opacity .12s ease;
+}
+.back-btn:active, .detail-tools .tool:active, .card-view-close:active { transform: scale(.94); }
+.back-btn:active img, .detail-tools .tool:active img, .round-row .edit:active img,
+.tabbar a:active .ic { transform: scale(.88); }
+.round-row .edit:active { transform: scale(.92); opacity: 1; }
+.decklist-toggle:active, .stat-section-toggle:active { opacity: .62; }
+.decklist-toggle:active .decklist-toggle-chev,
+.stat-section-toggle:active .stat-section-chev { transform: scale(.82); }
+.decklist-section.open .decklist-toggle:active .decklist-toggle-chev,
+.stat-section.open .stat-section-toggle:active .stat-section-chev { transform: rotate(180deg) scale(.82); }
 .detail-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
 .detail-head .left { flex: 1; min-width: 0; }
 .detail-head h1 { margin: 0; font-size: 25px; font-weight: 800; }
@@ -239,7 +271,10 @@ img { image-rendering: pixelated; }
 }
 @keyframes deckShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .decklist-card-name { display: block; padding: 0 6px; font-size: 10.5px; font-weight: 600; color: #5b6172; line-height: 1.25; }
-.decklist-card-img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: auto; }
+.decklist-card-img { width: 100%; height: 100%; object-fit: contain; display: block;
+  image-rendering: auto; opacity: 0; transform: scale(.985);
+  transition: opacity .24s ease, transform .3s cubic-bezier(.2,.8,.2,1); }
+.decklist-card.has-img .decklist-card-img { opacity: 1; transform: scale(1); }
 .decklist-card-badge { position: absolute; left: 5px; bottom: 5px; min-width: 18px; height: 18px;
   padding: 0 4px; border-radius: 999px; background: var(--primary); color: #fff;
   font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center;
@@ -462,3 +497,14 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
   padding: 9px 0 10px; text-decoration: none; color: var(--faint); font-size: 11px; font-weight: 600; }
 .tabbar a .ic { width: 22px; height: 22px; stroke: currentColor; flex: 0 0 auto; }
 .tabbar a.active { color: var(--primary); }
+.tabbar a:active { background: #f3f4f8; transform: scale(.96); }
+
+@media (prefers-reduced-motion: reduce) {
+  .decklist-card:not(.has-img) .decklist-card-art { animation: none; }
+  .decklist-card-img, .back-btn, .detail-tools .tool, .round-row .edit,
+  .card-view-close, .decklist-toggle, .stat-section-toggle, .tabbar a,
+  .back-btn img, .detail-tools .tool img, .round-row .edit img,
+  .decklist-toggle-chev, .stat-section-chev, .tabbar a .ic {
+    transition: none;
+  }
+}
