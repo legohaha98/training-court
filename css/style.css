@@ -357,8 +357,10 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 /* Frosted-glass hero card. The page background is a flat light gray, so
    backdrop blur alone would show nothing — the glass effect comes from
    soft colored blobs painted INSIDE the card (::before, heavily blurred)
-   under a translucent white layer. Ring hole is a more-opaque white so
-   the blobs ghost through it slightly, which is what sells the glass. */
+   under a translucent white layer. The ring hole is fully opaque (not
+   translucent like the card) — letting the blobs ghost through it tinted
+   the "100%" text an ugly pale green when the win blob happened to sit
+   behind the ring. */
 .winrate-hero { position: relative; overflow: hidden; display: flex; align-items: center;
   gap: 18px; background: rgba(255, 255, 255, .55); border: 1px solid rgba(255, 255, 255, .85);
   border-radius: 18px; padding: 18px 16px; margin: 16px 0 10px;
@@ -380,10 +382,10 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .winrate-ring { position: relative; width: 104px; height: 104px; border-radius: 50%; flex: 0 0 auto;
   background: conic-gradient(from -90deg, var(--win-ink) calc(var(--wr) * 1%), var(--loss-bg) 0);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: inset 0 0 0 1px rgba(20, 24, 45, .04); }
-.winrate-ring-hole { width: 86px; height: 86px; border-radius: 50%; background: rgba(255, 255, 255, .82);
+  box-shadow: inset 0 0 0 1px rgba(20, 24, 45, .04), 0 4px 14px rgba(18, 161, 80, .18); }
+.winrate-ring-hole { width: 86px; height: 86px; border-radius: 50%; background: #fff;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  box-shadow: 0 1px 3px rgba(20, 24, 45, .06); }
+  box-shadow: 0 1px 3px rgba(20, 24, 45, .08); }
 .winrate-ring-pct { font-size: 21px; font-weight: 800; line-height: 1; color: var(--ink); }
 .winrate-ring-cap { font-size: 11px; color: var(--muted); margin-top: 3px; }
 .winrate-hero-side { display: flex; flex-direction: column; gap: 8px; font-size: 14px;
