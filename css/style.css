@@ -354,17 +354,26 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
    bar here. Per-deck/matchup lists below stay bars (see .wr-bar): bars are
    what actually compare well across many rows at a glance, a pie/ring does
    not. Percentage is drawn via conic-gradient, no chart library needed.
-   Gave up on a "hero" glass/dark treatment after two rounds of feedback
-   (felt out of place, then still looked bad even fixed) — this is now
-   just the same plain white card every other section on this page uses
-   (.order-card/.stat-tile), so the ring itself is the only thing that
-   stands out instead of fighting the card around it. */
-.winrate-hero { display: flex; align-items: center; gap: 18px; background: var(--card);
-  border: 1px solid var(--line); border-radius: 16px; padding: 16px;
-  margin: 16px 0 10px; box-shadow: var(--shadow); }
+   The card stays mostly white, with a restrained neutral frosted tint and
+   Pokeball watermark. The ring uses green for wins and neutral grey for the
+   remainder; red/pink remains reserved for explicit loss labels. */
+.winrate-hero { position: relative; isolation: isolate; overflow: hidden;
+  display: flex; align-items: center; gap: 18px;
+  background:
+    radial-gradient(circle at 94% 88%, rgba(210, 214, 238, .34), transparent 45%),
+    rgba(255, 255, 255, .88);
+  backdrop-filter: saturate(125%) blur(10px);
+  -webkit-backdrop-filter: saturate(125%) blur(10px);
+  border: 1px solid rgba(255, 255, 255, .9); border-radius: 18px; padding: 16px;
+  margin: 16px 0 10px; box-shadow: 0 6px 22px rgba(20, 24, 45, .06); }
+.winrate-hero::after { content: ""; position: absolute; z-index: -1;
+  width: 142px; height: 142px; right: -28px; bottom: -54px;
+  background: url("../assets/pokeball.svg") center / contain no-repeat;
+  opacity: .055; filter: grayscale(1); transform: rotate(-11deg); pointer-events: none; }
+.winrate-hero > * { position: relative; z-index: 1; }
 .winrate-ring { position: relative; width: 96px; height: 96px; border-radius: 50%; flex: 0 0 auto;
-  background: conic-gradient(from -90deg, var(--win-ink) calc(var(--wr) * 1%), var(--loss-bg) 0); }
-.winrate-ring-hole { position: absolute; inset: 10px; border-radius: 50%; background: var(--card);
+  background: conic-gradient(from -90deg, var(--win-ink) calc(var(--wr) * 1%), #e7e9ee 0); }
+.winrate-ring-hole { position: absolute; inset: 10px; border-radius: 50%; background: #fff;
   display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .winrate-ring-pct { font-size: 20px; font-weight: 800; line-height: 1; color: var(--ink); }
 .winrate-ring-cap { font-size: 11px; color: var(--muted); margin-top: 3px; }
