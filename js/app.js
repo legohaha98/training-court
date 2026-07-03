@@ -36,6 +36,14 @@
 
   var main;
 
+  function emptyState(title, copy, compact) {
+    return el("div", { class: "empty" + (compact ? " empty-compact" : "") }, [
+      el("img", { class: "empty-ball", src: "assets/pokeball.svg", alt: "" }),
+      el("div", { class: "empty-title" }, [title]),
+      copy ? el("div", { class: "empty-copy" }, [copy]) : null
+    ]);
+  }
+
   // ---------------------------------------------------------------- LIST
   var listFilters = { category: "", format: "" };
 
@@ -68,10 +76,9 @@
     });
 
     if (!filtered.length) {
-      main.appendChild(el("div", { class: "empty" }, [
-        el("img", { class: "empty-ball", src: "assets/pokeball.svg", alt: "" }),
-        el("div", {}, ["还没有锦标赛，点击「新建锦标赛」开始记录吧。"])
-      ]));
+      main.appendChild(all.length
+        ? emptyState("没有符合筛选的锦标赛", "换一个分类或赛制看看。")
+        : emptyState("还没有锦标赛", "点击「新建锦标赛」，开始记录第一场比赛。"));
       return;
     }
 
@@ -170,7 +177,7 @@
   function renderDetail(id) {
     var t = S.getTournament(id);
     main.innerHTML = "";
-    if (!t) { main.appendChild(el("div", { class: "empty" }, ["找不到该锦标赛。"])); return; }
+    if (!t) { main.appendChild(emptyState("找不到该锦标赛", "它可能已被删除或尚未恢复。")); return; }
     var rec = S.computeRecord(t.rounds);
 
     main.appendChild(el("div", { class: "detail-bar" }, [
@@ -403,19 +410,43 @@
     var art = el("div", { class: "decklist-card-art" }, [
       el("span", { class: "decklist-card-name" }, [c.name])
     ]);
-    var tile = el("div", { class: "decklist-card" }, [
+    var tile = el("div", { class: "decklist-card", role: "button", tabindex: "0",
+      "aria-label": "查看 " + c.name }, [
       art,
       el("div", { class: "decklist-card-badge" }, [String(c.count)]),
       el("div", { class: "decklist-card-meta" }, [c.set ? (c.set + " " + c.number) : ""])
     ]);
+    var imagePromise = Promise.resolve(null);
     if (window.UI && UI.fetchCardImage) {
-      UI.fetchCardImage(c.set, c.number, c.name).then(function (url) {
+      imagePromise = UI.fetchCardImage(c.set, c.number, c.name).then(function (url) {
         if (!url) return;
         var img = el("img", { src: url, alt: c.name, class: "decklist-card-img" });
         img.addEventListener("load", function () { art.innerHTML = ""; art.appendChild(img); tile.classList.add("has-img"); });
+        return url;
       });
     }
+    function viewCard() {
+      imagePromise.then(function (url) { if (url) openCardViewer(c, url); });
+    }
+    tile.addEventListener("click", viewCard);
+    tile.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); viewCard(); }
+    });
     return tile;
+  }
+
+  function openCardViewer(c, url) {
+    showOverlay(el("div", { class: "modal card-view-modal" }, [
+      el("div", { class: "grip" }),
+      el("button", { class: "card-view-close", "aria-label": "关闭", onclick: closeOverlay }, ["×"]),
+      el("img", { class: "card-view-image", src: url, alt: c.name }),
+      el("div", { class: "card-view-info" }, [
+        el("div", { class: "card-view-title" }, [c.name]),
+        el("div", { class: "card-view-meta" }, [
+          (c.set ? c.set + " " + c.number : "未标注系列") + " · " + (c.count || 1) + " 张"
+        ])
+      ])
+    ]));
   }
 
   // Collapsed by default: rounds are what you check most often, and the
@@ -527,15 +558,35 @@
   // ---------------------------------------------------------------- STATS
   var statsFormatFilter = "";
 
+  function openDataManagementModal() {
+    function action(title, copy, handler) {
+      return el("button", { class: "data-manage-action", onclick: function () {
+        closeOverlay();
+        handler();
+      } }, [
+        el("span", { class: "dma-copy" }, [
+          el("strong", {}, [title]),
+          el("small", {}, [copy])
+        ]),
+        el("span", { class: "dma-arrow", "aria-hidden": "true" }, ["›"])
+      ]);
+    }
+    showOverlay(el("div", { class: "modal data-manage-modal" }, [
+      el("div", { class: "grip" }),
+      el("h2", {}, ["数据管理"]),
+      el("p", { class: "data-manage-intro" }, ["数据只保存在当前设备，建议比赛后定期备份。"]),
+      action("备份全部数据", "生成一段可保存到备忘录的代码", openBackupExportModal),
+      action("恢复备份", "从之前保存的代码追加锦标赛", openBackupImportModal)
+    ]));
+  }
+
   function renderStats() {
     main.innerHTML = "";
-    main.appendChild(el("div", { class: "page-title" }, ["数据"]));
-    main.appendChild(el("p", { class: "page-sub" }, ["整体胜率、卡组表现与对位统计"]));
-
-    main.appendChild(el("div", { class: "row-actions" }, [
-      el("button", { class: "btn btn-ghost", style: "flex:1", onclick: openBackupExportModal }, ["备份全部数据"]),
-      el("button", { class: "btn btn-ghost", style: "flex:1", onclick: openBackupImportModal }, ["恢复备份"])
+    main.appendChild(el("div", { class: "stats-title-row" }, [
+      el("div", { class: "page-title" }, ["数据"]),
+      el("button", { class: "data-manage-trigger", onclick: openDataManagementModal }, ["数据管理"])
     ]));
+    main.appendChild(el("p", { class: "page-sub" }, ["整体胜率、卡组表现与对位统计"]));
 
     // Standard rotates, so all-time stats mixing multiple formats aren't
     // really comparable — offer a filter once there's more than one format
@@ -556,9 +607,9 @@
     var s = S.computeStats(statsFormatFilter || undefined);
 
     if (!s.games) {
-      main.appendChild(el("div", { class: "empty" }, [
-        statsFormatFilter ? "这个赛制下还没有对局数据。" : "还没有对局数据。先到「锦标赛」记录几轮对局吧。"
-      ]));
+      main.appendChild(statsFormatFilter
+        ? emptyState("这个赛制还没有对局", "换一个赛制，或继续记录新的比赛。")
+        : emptyState("还没有对局数据", "先到「锦标赛」记录几轮对局，统计会自动生成。"));
       return;
     }
 
@@ -622,7 +673,7 @@
     // fold either one away individually keeps the page manageable.
     function section(title, list, showTags) {
       var body = el("div", { class: "stat-section-body" });
-      if (!list.length) body.appendChild(el("div", { class: "empty", style: "padding:18px" }, ["暂无数据"]));
+      if (!list.length) body.appendChild(emptyState("暂无数据", "记录更多完整对局后会显示。", true));
       else list.forEach(function (it) { body.appendChild(statRow(it, showTags)); });
 
       var sec = el("div", { class: "stat-section open" });

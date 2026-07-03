@@ -135,9 +135,17 @@ img { image-rendering: pixelated; }
 /* winning records green, losing red — same semantic colors as round rows */
 .rec-up { color: var(--win-ink); }
 .rec-down { color: var(--loss-ink); }
-.empty { color: var(--muted); text-align: center; padding: 56px 16px; font-size: 14px; }
-.empty-ball { width: 56px; height: 56px; margin: 0 auto 14px; display: block;
-  filter: grayscale(1); opacity: .3; }
+.empty { color: var(--muted); text-align: center; padding: 38px 20px; margin-top: 14px;
+  font-size: 14px; border: 1px dashed #dfe2e9; border-radius: 18px;
+  background: rgba(255,255,255,.5); }
+.empty-ball { width: 58px; height: 58px; margin: 0 auto 13px; display: block;
+  filter: grayscale(1); opacity: .09; }
+.empty-title { color: #555b6b; font-size: 15px; font-weight: 700; }
+.empty-copy { color: var(--muted); font-size: 13px; margin-top: 5px; line-height: 1.55; }
+.empty.empty-compact { padding: 19px 16px; margin: 0 0 9px; }
+.empty-compact .empty-ball { width: 30px; height: 30px; margin-bottom: 7px; opacity: .08; }
+.empty-compact .empty-title { font-size: 13.5px; }
+.empty-compact .empty-copy { font-size: 12px; margin-top: 2px; }
 .list-actions { display: flex; gap: 10px; align-items: center; }
 .import-btn { white-space: nowrap; padding: 12px 18px; font-size: 15px; }
 
@@ -213,7 +221,9 @@ img { image-rendering: pixelated; }
 .decklist-cat-label:first-of-type { margin-top: 0; }
 .decklist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px; }
 .decklist-card { position: relative; border-radius: 10px; overflow: hidden; background: #eceef4;
-  box-shadow: var(--shadow); }
+  box-shadow: var(--shadow); cursor: pointer; transition: transform .08s, box-shadow .15s; }
+.decklist-card:active { transform: scale(.97); }
+.decklist-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* No padding here — the art box's aspect-ratio must exactly match a real
    card image's shape so the <img> (width/height:100%) fills it cleanly.
    A padded container used to shrink the ratio away from ~5:7, which with
@@ -229,7 +239,7 @@ img { image-rendering: pixelated; }
 }
 @keyframes deckShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .decklist-card-name { display: block; padding: 0 6px; font-size: 10.5px; font-weight: 600; color: #5b6172; line-height: 1.25; }
-.decklist-card-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.decklist-card-img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: auto; }
 .decklist-card-badge { position: absolute; left: 5px; bottom: 5px; min-width: 18px; height: 18px;
   padding: 0 4px; border-radius: 999px; background: var(--primary); color: #fff;
   font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center;
@@ -238,6 +248,19 @@ img { image-rendering: pixelated; }
    identify the card by, so hide it once an image loads in */
 .decklist-card-meta { font-size: 9.5px; color: var(--muted); text-align: center; padding: 0 4px 6px; }
 .decklist-card.has-img .decklist-card-meta { display: none; }
+
+/* Card viewer: never upscale beyond the bundled image's natural 274px width,
+   which keeps text crisper than stretching it edge-to-edge on a phone. */
+.card-view-modal { position: relative; text-align: center; padding-top: 18px; }
+.card-view-close { position: absolute; top: 12px; right: 14px; z-index: 2;
+  width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(29,34,51,.72);
+  color: #fff; font-size: 25px; line-height: 1; display: grid; place-items: center;
+  font-family: inherit; cursor: pointer; }
+.card-view-image { display: block; width: min(274px, 78vw); height: auto; margin: 4px auto 14px;
+  border-radius: 12px; box-shadow: 0 14px 34px rgba(20,24,45,.2); image-rendering: auto; }
+.card-view-info { text-align: left; max-width: 274px; margin: 0 auto; }
+.card-view-title { font-size: 18px; font-weight: 800; color: var(--ink); }
+.card-view-meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
 /* ---- forms (inline card + modal share these) ---- */
 .form-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
@@ -362,6 +385,22 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .storage-warn .sw-text strong { display: block; font-weight: 700; margin-bottom: 2px; }
 
 /* ---- stats ---- */
+.stats-title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.stats-title-row .page-title { margin-bottom: 0; }
+.data-manage-trigger { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(255,255,255,.72); color: #686e7e; padding: 7px 12px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.data-manage-trigger:active { background: #eceef4; }
+.data-manage-intro { color: var(--muted); font-size: 13px; margin: -7px 0 13px; }
+.data-manage-action { width: 100%; border: 0; border-top: 1px solid var(--line); background: transparent;
+  padding: 15px 3px; display: flex; align-items: center; gap: 12px; text-align: left;
+  color: var(--ink); font-family: inherit; cursor: pointer; }
+.data-manage-action:last-child { border-bottom: 1px solid var(--line); }
+.data-manage-action:active { background: #f5f6f9; }
+.dma-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dma-copy strong { font-size: 15px; }
+.dma-copy small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.dma-arrow { color: var(--faint); font-size: 25px; font-weight: 300; line-height: 1; }
 /* Overall win rate = one total split into two — a ring reads better than a
    bar here. Per-deck/matchup lists below stay bars (see .wr-bar): bars are
    what actually compare well across many rows at a glance, a pie/ring does
