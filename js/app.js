@@ -59,7 +59,10 @@
     });
 
     if (!filtered.length) {
-      main.appendChild(el("div", { class: "empty" }, ["还没有锦标赛，点击「新建锦标赛」开始记录吧。"]));
+      main.appendChild(el("div", { class: "empty" }, [
+        el("img", { class: "empty-ball", src: "assets/pokeball.svg", alt: "" }),
+        el("div", {}, ["还没有锦标赛，点击「新建锦标赛」开始记录吧。"])
+      ]));
       return;
     }
 
@@ -70,15 +73,22 @@
         el("div", { class: "icon-wrap" }, [deckSprites(t.deck)]),
         el("div", { class: "t-meta" }, [
           el("div", { class: "name" }, [t.name]),
-          el("div", { class: "date" }, [fmtDate(t.date)])
+          el("div", { class: "date" }, [fmtDate(t.date) + (t.category ? " · " + t.category : "")])
         ]),
         el("div", { class: "t-record" }, [
-          el("div", { class: "rec" }, [rec.label]),
+          el("div", { class: "rec " + recClass(rec) }, [rec.label]),
           t.placement ? el("div", { class: "place" }, [t.placement]) : null
         ])
       ]));
     });
     main.appendChild(list);
+  }
+
+  // color a W-L record by whether it's winning (green), losing (red), or even
+  function recClass(rec) {
+    if (rec.w > rec.l) return "rec-up";
+    if (rec.w < rec.l) return "rec-down";
+    return "";
   }
 
   // ---------------------------------------------------------------- CREATE / EDIT MODAL
@@ -174,10 +184,17 @@
         el("div", { class: "date" }, [fmtDate(t.date)])
       ]),
       el("div", { class: "right" }, [
-        el("div", { class: "big-rec" }, [rec.label]),
+        el("div", { class: "big-rec " + recClass(rec) }, [rec.label]),
         deckSprites(t.deck)
       ])
     ]));
+    // add/edit/delete-round handlers below update the record in place
+    function refreshBigRec() {
+      var newRec = S.computeRecord(t.rounds);
+      var n = main.querySelector(".big-rec");
+      n.textContent = newRec.label;
+      n.className = "big-rec " + recClass(newRec);
+    }
     var chips = el("div", { class: "chips" }, [
       t.category ? el("div", { class: "chip cat" }, [t.category]) : null,
       t.placement ? el("div", { class: "chip" }, [t.placement]) : null,
@@ -199,9 +216,7 @@
             t = S.getTournament(id);   // reload
             editingRid = null;
             renderRounds();
-            // update header record
-            var newRec = S.computeRecord(t.rounds);
-            main.querySelector(".big-rec").textContent = newRec.label;
+            refreshBigRec();
           }));
           return;
         }
@@ -223,14 +238,18 @@
             onclick: function () {
               if (!confirm("确定删除第 " + r.number + " 轮？")) return;
               S.deleteRound(id, r.id); t = S.getTournament(id); renderRounds();
-              var newRec = S.computeRecord(t.rounds); main.querySelector(".big-rec").textContent = newRec.label;
+              refreshBigRec();
             } })
         ]);
         var extras = [];
         if (r.tags && r.tags.length) {
           extras.push(el("div", { class: "round-tags" }, r.tags.map(function (key) {
             var tag = LOSS_TAGS.filter(function (lt) { return lt.key === key; })[0];
-            return tag ? el("span", { class: "tag-chip" }, [tag.label]) : null;
+            if (!tag) return null;
+            // variance tags (bad draw / opponent luck) aren't the player's
+            // mistake — show them neutral gray, not "error red"
+            var isVariance = S.ROUND_SKILL_TAG_KEYS.indexOf(key) < 0;
+            return el("span", { class: "tag-chip" + (isVariance ? " variance" : "") }, [tag.label]);
           })));
         }
         if (r.note) extras.push(el("div", { class: "round-note" }, [r.note]));
@@ -249,8 +268,7 @@
     main.appendChild(el("button", { class: "add-round-btn", onclick: function () {
       addArea.innerHTML = "";
       addArea.appendChild(roundForm(t, null, function (patch) {
-        if (patch) { S.addRound(id, patch); t = S.getTournament(id); renderRounds();
-          var newRec = S.computeRecord(t.rounds); main.querySelector(".big-rec").textContent = newRec.label; }
+        if (patch) { S.addRound(id, patch); t = S.getTournament(id); renderRounds(); refreshBigRec(); }
         addArea.innerHTML = "";
       }));
       addArea.scrollIntoView({ behavior: "smooth", block: "center" });
