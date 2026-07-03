@@ -24,7 +24,7 @@
   // thin/inconsistently across platforms.
   function chevSvg(cls) {
     return el("span", { class: cls,
-      html: "<svg width=\"20\" height=\"14\" viewBox=\"0 0 12 8\" fill=\"currentColor\"><path d=\"M6 8 0 0h12z\"/></svg>" });
+      html: "<svg width=\"14\" height=\"10\" viewBox=\"0 0 12 8\" fill=\"currentColor\"><path d=\"M6 8 0 0h12z\"/></svg>" });
   }
 
   function fmtDate(iso) {
