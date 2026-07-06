@@ -293,7 +293,17 @@
 
     function renderRounds() {
       rounds.innerHTML = "";
+      // League Cup mixes Bo1 Swiss rounds with Bo3 Top Cut rounds in the
+      // same tournament — mark the phase change so the list doesn't read as
+      // one undifferentiated block once bestOf actually changes.
+      var prevBestOf = null;
       t.rounds.forEach(function (r) {
+        if (r.bestOf != null && prevBestOf != null && r.bestOf !== prevBestOf) {
+          rounds.appendChild(el("div", { class: "round-divider" }, [
+            r.bestOf === 3 ? tr("顶尖战（Bo3）", "Top Cut (Bo3)") : tr("瑞士轮（Bo1）", "Swiss (Bo1)")
+          ]));
+        }
+        prevBestOf = r.bestOf != null ? r.bestOf : prevBestOf;
         if (r.id === editingRid) {
           // inline edit form for this round
           rounds.appendChild(roundForm(t, r, function (patch) {
@@ -726,8 +736,8 @@
       el("p", { class: "data-manage-intro" }, [
         "选择你参赛的赛事体系，之后可以随时在「设置」里切换。 / Choose which event system you play in — switch anytime in Settings."
       ]),
-      el("button", { class: "btn btn-primary", style: "margin-bottom:10px", onclick: function () { pick("zh"); } }, ["简体中文"]),
-      el("button", { class: "btn btn-ghost", onclick: function () { pick("en"); } }, ["International English"])
+      el("button", { class: "btn btn-primary", style: "width:100%;margin-bottom:10px", onclick: function () { pick("zh"); } }, ["简体中文"]),
+      el("button", { class: "btn btn-ghost", style: "width:100%", onclick: function () { pick("en"); } }, ["International English"])
     ]), dismissible);
   }
 
