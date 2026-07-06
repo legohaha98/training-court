@@ -743,6 +743,20 @@
       UI.PokemonPicker({ value: draft.opponentDeck[0], onChange: function (id) { draft.opponentDeck[0] = id; } }),
       UI.PokemonPicker({ value: draft.opponentDeck[1], onChange: function (id) { draft.opponentDeck[1] = id; } })
     ]);
+    var noteInput = el("textarea", { class: "note-input",
+      placeholder: tr("比如：对面缺能量、关键卡没抽到……", "e.g. opponent was energy-starved, missed a key draw…"),
+      oninput: function () { draft.note = this.value; } }, [draft.note]);
+    var detailsWrap = el("div", { class: "round-details" }, [
+      el("div", { class: "round-details-head" }, [
+        el("span", { class: "round-details-title" }, [tr("对局信息", "Match details")]),
+        el("span", { class: "round-details-hint" }, [tr("可稍后补充", "Optional · add later")])
+      ]),
+      el("label", { class: "lbl" }, [tr("对手卡组", "Opponent's Deck")]),
+      deckRow,
+      tagWrap,
+      el("label", { class: "lbl" }, [tr("备注（复盘用，可选）", "Notes (optional)")]),
+      noteInput
+    ]);
 
     function sync() {
       if (useGameSequence()) {
@@ -812,8 +826,6 @@
     var roundNum = existing ? existing.number : t.rounds.length + 1;
     return el("div", { class: "form-card" }, [
       el("h3", {}, [tr("第 " + roundNum + " 轮", "Round " + roundNum) + (existing ? tr(" · 编辑", " · Edit") : "")]),
-      el("label", { class: "lbl" }, [tr("对手卡组", "Opponent's Deck")]),
-      deckRow,
       bestOfSeg ? el("label", { class: "lbl" }, ["Round Type"]) : null,
       bestOfSeg,
       el("label", { class: "lbl" }, [tr("比赛结果", "Result")]),
@@ -823,10 +835,7 @@
       orderSeg,
       el("label", { class: "lbl" }, [tr("其他结果", "Other Outcome")]),
       outcomeSeg,
-      tagWrap,
-      el("label", { class: "lbl" }, [tr("备注（复盘用，可选）", "Notes (optional)")]),
-      el("textarea", { class: "note-input", placeholder: tr("比如：对面缺能量、关键卡没抽到…", "e.g. opponent was energy-starved, missed a key draw…"),
-        oninput: function () { draft.note = this.value; } }, [draft.note]),
+      detailsWrap,
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-ghost", onclick: function () { done(null); } }, [tr("取消", "Cancel")]),
         submitBtn
@@ -1329,6 +1338,11 @@
 
   // ---------------------------------------------------------------- ROUTER
   function setActiveNav(route) {
+    var isEn = getRegion() === "en";
+    var tournamentsTab = document.getElementById("tab-tournaments-label");
+    var statsTab = document.getElementById("tab-stats-label");
+    if (tournamentsTab) tournamentsTab.textContent = isEn ? "Tournaments" : "锦标赛";
+    if (statsTab) statsTab.textContent = isEn ? "Stats" : "数据";
     document.querySelectorAll(".tabbar a[data-route]").forEach(function (n) {
       n.classList.toggle("active", n.getAttribute("data-route") === route);
     });
