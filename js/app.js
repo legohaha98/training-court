@@ -325,7 +325,9 @@
           el("div", { class: "rnum" }, [String(r.number)]),
           opp,
           orderBadge,
-          el("div", { class: "res" }, [resLabel(r)]),
+          el("div", { class: "res" }, [resLabel(r) + (r.games && r.games.length ? " " +
+            r.games.filter(function (g) { return g === "W"; }).length + "-" +
+            r.games.filter(function (g) { return g === "L"; }).length : "")]),
           el("div", { class: "edit", title: tr("编辑该轮", "Edit this round"),
             onclick: function () { editingRid = r.id; renderRounds(); } },
             [el("img", { src: "assets/icon-edit.svg", alt: tr("编辑", "Edit") })]),
@@ -586,6 +588,7 @@
       el("label", { class: "lbl" }, [tr("比赛结果", "Result")]),
       resultWrap,
       gamesWrap,
+      el("label", { class: "lbl" }, [tr("先后手", "Play Order")]),
       orderSeg,
       el("label", { class: "lbl" }, [tr("其他结果", "Other Outcome")]),
       outcomeSeg,
