@@ -353,14 +353,14 @@
   function _decodeTags(arr) {
     return (arr || []).map(function (i) { return ROUND_TAG_KEYS[i]; }).filter(Boolean);
   }
-  // Per-game Bo3 sequence (English mode only) — 0=W, 1=L per individual
+  // Per-game Bo3 sequence (English mode only) — 0=W, 1=L, 2=T per individual
   // game. Absent/empty on Bo1 and 简中 rounds, and on any code from before
   // per-game tracking existed.
   function _encodeGames(games) {
-    return (games || []).map(function (g) { return g === "L" ? 1 : 0; });
+    return (games || []).map(function (g) { return g === "L" ? 1 : g === "T" ? 2 : 0; });
   }
   function _decodeGames(arr) {
-    return (arr || []).map(function (i) { return i === 1 ? "L" : "W"; });
+    return (arr || []).map(function (i) { return i === 1 ? "L" : i === 2 ? "T" : "W"; });
   }
   // Per-game play order, parallel to the games array — 0=unrecorded,
   // 1=went first, 2=went second (same 1/2 convention as the round-level

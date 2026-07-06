@@ -51,10 +51,11 @@
   function resLabel(r) {
     if (r.special === "BYE" || r.special === "NO_SHOW") return tr("胜", "W");
     if (r.special === "DOUBLE_LOSS") return tr("双败", "DL");
-    // Bo3 rounds show the game sequence itself — "WW", "WLW", and a
-    // time-called tie after 1-1 reads "WLT" (the T is the unplayed/timed-out
-    // game 3, not a stored game).
-    if (r.games && r.games.length) return r.games.join("") + (r.result === "T" ? "T" : "");
+    // New records store a time-called third game as a real T (WLT). Older
+    // records stored only WL plus result=T, so keep the suffix fallback.
+    if (r.games && r.games.length) {
+      return r.games.join("") + (r.result === "T" && r.games.indexOf("T") < 0 ? "T" : "");
+    }
     if (r.result === "T") return tr("平", "T");
     return r.result === "W" ? tr("胜", "W") : r.result === "L" ? tr("负", "L") : "";
   }
@@ -302,12 +303,21 @@
       // one undifferentiated block once bestOf actually changes.
       var prevBestOf = null;
       t.rounds.forEach(function (r) {
-        if (r.bestOf != null && prevBestOf != null && r.bestOf !== prevBestOf) {
+        // Legacy League Cup rounds predate bestOf and are Swiss/Bo1. Treat
+        // them as Bo1 so the first saved Top Cut round still gets a divider.
+        var effectiveBestOf = r.bestOf || 1;
+        if (prevBestOf != null && effectiveBestOf !== prevBestOf) {
+          var isTopCut = effectiveBestOf === 3;
           rounds.appendChild(el("div", { class: "round-divider" }, [
-            r.bestOf === 3 ? tr("顶尖战（Bo3）", "Top Cut (Bo3)") : tr("瑞士轮（Bo1）", "Swiss (Bo1)")
+            el("span", { class: "round-divider-line" }),
+            el("span", { class: "round-divider-label" }, [
+              el("strong", {}, [isTopCut ? tr("顶尖战", "Top Cut") : tr("瑞士轮", "Swiss")]),
+              el("small", {}, [isTopCut ? "Best of 3" : "Best of 1"])
+            ]),
+            el("span", { class: "round-divider-line" })
           ]));
         }
-        prevBestOf = r.bestOf != null ? r.bestOf : prevBestOf;
+        prevBestOf = effectiveBestOf;
         if (r.id === editingRid) {
           // inline edit form for this round
           rounds.appendChild(roundForm(t, r, function (patch) {
@@ -353,7 +363,7 @@
             var oTxt = o === true ? tr("先", "1st") : o === false ? tr("后", "2nd") : null;
             return "G" + (i + 1) + " " + g + (oTxt ? "·" + oTxt : "");
           });
-          if (r.result === "T") parts.push(tr("超时平局", "T (time)"));
+          if (r.result === "T" && r.games.indexOf("T") < 0) parts.push(tr("第三局超时平局", "G3 T (time)"));
           extras.push(el("div", { class: "round-note" }, [parts.join("  /  ")]));
         }
         if (r.tags && r.tags.length) {
@@ -428,10 +438,16 @@
           special: existing.special || "", note: existing.note || "", tags: (existing.tags || []).slice(),
           bestOf: existing.bestOf || fixedBestOf,
           games: (existing.games || []).slice(),
-          gameOrders: (existing.gameOrders || []).slice(),
-          tied: existing.result === "T" && (existing.games || []).length === 2 }
+          gameOrders: (existing.gameOrders || []).slice() }
       : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "", note: "", tags: [],
-          bestOf: fixedBestOf, games: [], gameOrders: [], tied: false };
+          bestOf: fixedBestOf, games: [], gameOrders: [] };
+
+    // Upgrade the earlier WL + hidden tied flag representation in memory.
+    // Saving the edited round persists the explicit third-game T.
+    if (draft.bestOf === 3 && draft.result === "T" && draft.games.length === 2) {
+      draft.games.push("T");
+      draft.gameOrders.push(null);
+    }
 
     // ---- Bo1/Bo3 toggle (League Cup / no category chosen yet, English mode only) ----
     var bestOfSeg = null;
@@ -439,7 +455,7 @@
       bestOfSeg = el("div", { class: "seg small" }, [[1, "Swiss (Bo1)"], [3, "Top Cut (Bo3)"]].map(function (o) {
         return el("div", { class: "opt", onclick: function () {
           draft.bestOf = o[0];
-          draft.games = []; draft.gameOrders = []; draft.tied = false;   // switching best-of starts the sequence over
+          draft.games = []; draft.gameOrders = [];   // switching best-of starts the sequence over
           if (draft.bestOf === 1 && draft.result === "T") draft.result = "W";
           sync();
         } }, [o[1]]);
@@ -456,21 +472,23 @@
     var resultWrap = el("div", { class: "seg" });
 
     // ---- Bo3 per-game sequence (English mode, Bo3 rounds only) ----
-    // A Bo3 match is decided in 2 games (WW/LL) or 3 (WLW/WLL/LWW/LWL); a 1-1
-    // split after 2 games either continues to a decisive game 3, or — if the
-    // round clock runs out before it's played — ends as a tie at 1-1.
-    var gamesWrap = el("div", {});
+    // A Bo3 match is decided in 2 games (WW/LL) or 3 (WLW/WLL/LWW/LWL).
+    // If time is called in game 3 after a 1-1 split, that game is recorded as
+    // a real T, producing WLT/LWT and an overall match tie.
+    var gamesWrap = el("div", { class: "bo3-games" });
     function useGameSequence() { return isEn && draft.bestOf === 3; }
     // Each game gets its own result AND its own play order — players re-roll
     // or alternate who goes first between games in a Bo3, so a single
     // round-level 先后手 can't represent it.
-    function gameSeg(gameNum, idx) {
-      var resSeg = el("div", { class: "seg small" }, [["W", "W"], ["L", "L"]].map(function (o) {
+    function gameSeg(gameNum, idx, allowTie) {
+      var options = [["W", "W"], ["L", "L"]];
+      if (allowTie) options.push([tr("平", "T"), "T"]);
+      var resSeg = el("div", { class: "seg small game-result-seg" }, options.map(function (o) {
         var selected = draft.games[idx] === o[1];
-        return el("div", { class: "opt" + (selected ? (o[1] === "W" ? " sel-w" : " sel-l") : ""), onclick: function () {
+        var selectedClass = o[1] === "W" ? " sel-w" : o[1] === "L" ? " sel-l" : " sel-t";
+        return el("div", { class: "opt" + (selected ? selectedClass : ""), onclick: function () {
           draft.games = draft.games.slice(0, idx).concat([o[1]]);
           draft.gameOrders = draft.gameOrders.slice(0, idx + 1);   // later games restart, their orders too
-          draft.tied = false;
           draft.special = "";
           sync();
         } }, [o[0]]);
@@ -482,8 +500,8 @@
           sync();
         } }, [o[0]]);
       }));
-      return el("div", {}, [
-        el("label", { class: "lbl" }, [tr("第 " + gameNum + " 局", "Game " + gameNum)]),
+      return el("div", { class: "game-entry" }, [
+        el("label", { class: "lbl game-entry-label" }, [tr("第 " + gameNum + " 局", "Game " + gameNum)]),
         el("div", { class: "game-row" }, [resSeg, ordSeg])
       ]);
     }
@@ -492,33 +510,28 @@
       var l = draft.games.filter(function (g) { return g === "L"; }).length;
       if (w >= 2) return "W";
       if (l >= 2) return "L";
-      if (draft.games.length === 2 && draft.tied) return "T";
-      return null;   // incomplete — 1-1 with no game 3 and not marked tied yet
+      if (draft.games.length === 3 && draft.games[2] === "T") return "T";
+      return null;   // incomplete — 1-1 with no game-3 result yet
     }
     function buildGamesUI() {
       gamesWrap.innerHTML = "";
-      gamesWrap.appendChild(gameSeg(1, 0));
-      if (draft.games.length >= 1) gamesWrap.appendChild(gameSeg(2, 1));
+      gamesWrap.appendChild(gameSeg(1, 0, false));
+      if (draft.games.length >= 1) gamesWrap.appendChild(gameSeg(2, 1, false));
       if (draft.games.length >= 2) {
         var w = draft.games.filter(function (g) { return g === "W"; }).length;
         var l = draft.games.filter(function (g) { return g === "L"; }).length;
         if (draft.games.length === 2 && (w === 2 || l === 2)) {
           // WW/LL after only 2 games -> decided 2-0, no game 3 needed
           gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
-        } else if (draft.tied) {
-          gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("时间到，平局 1-1", "Time called — tie, 1-1")]));
-          gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = false; sync(); } },
-            [tr("改为打第三局", "Play Game 3 instead")]));
         } else {
-          // 1-1 split: game 3 row appears — and STAYS once filled, so its
-          // result and play order remain visible/editable (an earlier version
-          // swapped the row out for just the summary, orphaning game 3's order).
-          gamesWrap.appendChild(gameSeg(3, 2));
+          // A 1-1 split always exposes game 3, including an explicit Tie.
+          gamesWrap.appendChild(gameSeg(3, 2, true));
           if (draft.games.length === 3) {
-            gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
-          } else {
-            gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = true; sync(); } },
-              [tr("时间到，判平局", "Time called — mark as tie")]));
+            var isTie = draft.games[2] === "T";
+            gamesWrap.appendChild(el("div", { class: "games-summary" + (isTie ? " tie" : "") }, [
+              isTie ? tr("第三局时间到 · 整场平局", "Game 3 timed out · Match tie")
+                    : tr("已定胜负：", "Decided: ") + w + "-" + l
+            ]));
           }
         }
       }

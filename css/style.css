@@ -203,10 +203,17 @@ img { image-rendering: pixelated; }
 /* ---- rounds list (card rows) ---- */
 .rounds { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
 .round-item { display: flex; flex-direction: column; gap: 4px; }
-/* League Cup phase divider (Swiss/Bo1 -> Top Cut/Bo3) */
-.round-divider { display: flex; align-items: center; gap: 8px; margin: 6px 0 -2px;
-  color: var(--muted); font-size: 12px; font-weight: 700; }
-.round-divider::before, .round-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+/* League Cup phase divider: quiet enough for the list, clear enough that
+   Top Cut never looks like one more Swiss round. */
+.round-divider { display: flex; align-items: center; gap: 10px; margin: 11px 2px 3px; }
+.round-divider-line { flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, #d7dbea); }
+.round-divider-line:last-child { transform: scaleX(-1); }
+.round-divider-label { min-width: 92px; display: flex; flex-direction: column; align-items: center;
+  gap: 1px; padding: 6px 13px; border: 1px solid #e1e4f0; border-radius: 999px;
+  color: #5e6475; background: rgba(255,255,255,.88); box-shadow: 0 3px 12px rgba(34,40,72,.045); }
+.round-divider-label strong { font-size: 11.5px; line-height: 1.1; letter-spacing: .04em; text-transform: uppercase; }
+.round-divider-label small { color: var(--muted); font-size: 10.5px; line-height: 1.1; }
 .round-note { font-size: 12.5px; color: var(--muted); line-height: 1.4; padding: 0 14px;
   white-space: pre-wrap; word-break: break-word; }
 .round-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px; }
@@ -320,12 +327,18 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .seg .opt:active { transform: scale(.97); }
 .seg .opt.sel-w { background: var(--win-bg); color: var(--win-ink); border-color: var(--win-ink); }
 .seg .opt.sel-l { background: var(--loss-bg); color: var(--loss-ink); border-color: var(--loss-ink); }
+.seg .opt.sel-t { background: #eef0f5; color: #5e6473; border-color: #aeb4c2; }
 .seg .opt.sel { background: var(--primary); color: #fff; border-color: var(--primary); }
 .seg.small .opt { font-size: 14px; font-weight: 600; padding: 11px; }
 .tag-seg { flex-wrap: wrap; }
 .tag-seg .opt { flex: 0 0 auto; padding: 9px 13px; font-size: 13px; }
-/* Bo3 per-game sequence — decided/tied summary line under the game rows */
-.games-summary { margin-top: 6px; font-size: 13.5px; font-weight: 700; color: var(--muted); }
+/* Bo3 per-game sequence */
+.bo3-games { display: flex; flex-direction: column; gap: 8px; }
+.game-entry { padding: 11px; border: 1px solid #eceef4; border-radius: 14px; background: #f8f9fb; }
+.game-entry .game-entry-label { margin: 0 0 8px; color: #6a7080; font-size: 12px; }
+.games-summary { margin-top: 1px; padding: 8px 11px; border-radius: 11px;
+  background: var(--win-bg); font-size: 12.5px; font-weight: 700; color: var(--win-ink); text-align: center; }
+.games-summary.tie { background: #eef0f5; color: #666c7a; }
 /* each game's W/L seg + its own 1st/2nd seg side by side */
 .game-row { display: flex; gap: 8px; }
 .game-row .seg { flex: 1; }
