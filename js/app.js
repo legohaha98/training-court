@@ -534,12 +534,13 @@
       if (draft.games.length >= 2) {
         var w = draft.games.filter(function (g) { return g === "W"; }).length;
         var l = draft.games.filter(function (g) { return g === "L"; }).length;
-        if (draft.games[1] === "T" || w === 2 || l === 2) {
+        if (draft.games.length === 2 && (draft.games[1] === "T" || w === 2 || l === 2)) {
           // WT/LT resolve 1-0 or 0-1 when time is called in game 2;
           // WW/LL resolve normally at 2-0.
           appendGamesSummary(w, l);
         } else {
-          // A 1-1 split exposes game 3, where W/L/T are all possible.
+          // A 1-1 split exposes game 3, where W/L/T are all possible. Keep
+          // that row mounted after selection so mistakes stay easy to fix.
           gamesWrap.appendChild(gameSeg(3, 2));
           if (draft.games.length === 3) {
             appendGamesSummary(w, l);
