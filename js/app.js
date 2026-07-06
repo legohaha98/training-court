@@ -337,6 +337,13 @@
             } })
         ]);
         var extras = [];
+        if (r.games && r.games.length) {
+          var w = r.games.filter(function (g) { return g === "W"; }).length;
+          var l = r.games.filter(function (g) { return g === "L"; }).length;
+          extras.push(el("div", { class: "round-note" }, [
+            tr("每局：", "Games: ") + r.games.join(" · ") + " (" + w + "-" + l + ")"
+          ]));
+        }
         if (r.tags && r.tags.length) {
           extras.push(el("div", { class: "round-tags" }, r.tags.map(function (key) {
             var tag = LOSS_TAGS.filter(function (lt) { return lt.key === key; })[0];
@@ -407,9 +414,11 @@
       ? { opponentDeck: [(existing.opponentDeck||[])[0]||null, (existing.opponentDeck||[])[1]||null],
           result: existing.result || "W", wentFirst: existing.wentFirst !== undefined ? existing.wentFirst : null,
           special: existing.special || "", note: existing.note || "", tags: (existing.tags || []).slice(),
-          bestOf: existing.bestOf || fixedBestOf }
+          bestOf: existing.bestOf || fixedBestOf,
+          games: (existing.games || []).slice(),
+          tied: existing.result === "T" && (existing.games || []).length === 2 }
       : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "", note: "", tags: [],
-          bestOf: fixedBestOf };
+          bestOf: fixedBestOf, games: [], tied: false };
 
     // ---- Bo1/Bo3 toggle (League Cup / no category chosen yet, English mode only) ----
     var bestOfSeg = null;
@@ -417,21 +426,72 @@
       bestOfSeg = el("div", { class: "seg small" }, [[1, "Swiss (Bo1)"], [3, "Top Cut (Bo3)"]].map(function (o) {
         return el("div", { class: "opt", onclick: function () {
           draft.bestOf = o[0];
+          draft.games = []; draft.tied = false;   // switching best-of starts the sequence over
           if (draft.bestOf === 1 && draft.result === "T") draft.result = "W";
           sync();
         } }, [o[1]]);
       }));
     }
 
-    // Result options depend on region + best-of: 简中 is always 胜/负 (plus a
-    // separate 双败 special below); English Bo1 is Win/Loss, Bo3 is Win/Loss/Tie.
-    // Rebuilt on every sync() (not just class-toggled) since the option count
-    // itself can change live when the Bo1/Bo3 toggle flips.
+    // Result options for everything EXCEPT English Bo3 (that's the per-game
+    // sequence below): 简中 is always 胜/负 (plus a separate 双败 special),
+    // English Bo1 is Win/Loss.
     function resultOptions() {
       if (!isEn) return [["胜", "W"], ["负", "L"]];
-      return draft.bestOf === 3 ? [["Win", "W"], ["Loss", "L"], ["Tie", "T"]] : [["Win", "W"], ["Loss", "L"]];
+      return [["Win", "W"], ["Loss", "L"]];
     }
     var resultWrap = el("div", { class: "seg" });
+
+    // ---- Bo3 per-game sequence (English mode, Bo3 rounds only) ----
+    // A Bo3 match is decided in 2 games (WW/LL) or 3 (WLW/WLL/LWW/LWL); a 1-1
+    // split after 2 games either continues to a decisive game 3, or — if the
+    // round clock runs out before it's played — ends as a tie at 1-1.
+    var gamesWrap = el("div", {});
+    function useGameSequence() { return isEn && draft.bestOf === 3; }
+    function gameSeg(gameNum, idx) {
+      var seg = el("div", { class: "seg small" }, [["W", "W"], ["L", "L"]].map(function (o) {
+        var selected = draft.games[idx] === o[1];
+        return el("div", { class: "opt" + (selected ? (o[1] === "W" ? " sel-w" : " sel-l") : ""), onclick: function () {
+          draft.games = draft.games.slice(0, idx).concat([o[1]]);
+          draft.tied = false;
+          draft.special = "";
+          sync();
+        } }, [o[0]]);
+      }));
+      return el("div", {}, [el("label", { class: "lbl" }, [tr("第 " + gameNum + " 局", "Game " + gameNum)]), seg]);
+    }
+    function deriveBo3Result() {
+      var w = draft.games.filter(function (g) { return g === "W"; }).length;
+      var l = draft.games.filter(function (g) { return g === "L"; }).length;
+      if (w >= 2) return "W";
+      if (l >= 2) return "L";
+      if (draft.games.length === 2 && draft.tied) return "T";
+      return null;   // incomplete — 1-1 with no game 3 and not marked tied yet
+    }
+    function buildGamesUI() {
+      gamesWrap.innerHTML = "";
+      gamesWrap.appendChild(gameSeg(1, 0));
+      if (draft.games.length >= 1) gamesWrap.appendChild(gameSeg(2, 1));
+      if (draft.games.length >= 2) {
+        var w = draft.games.filter(function (g) { return g === "W"; }).length;
+        var l = draft.games.filter(function (g) { return g === "L"; }).length;
+        if (draft.games.length === 3) {
+          // game 3 played -> always decided, 2-1 either way
+          gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
+        } else if (w === 2 || l === 2) {
+          // WW/LL after only 2 games -> decided 2-0, no game 3 needed
+          gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
+        } else if (draft.tied) {
+          gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("时间到，平局 1-1", "Time called — tie, 1-1")]));
+          gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = false; sync(); } },
+            [tr("改为打第三局", "Play Game 3 instead")]));
+        } else {
+          gamesWrap.appendChild(gameSeg(3, 2));
+          gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = true; sync(); } },
+            [tr("时间到，判平局", "Time called — mark as tie")]));
+        }
+      }
+    }
 
     var orderSeg = el("div", { class: "seg small" }, [[tr("先手", "1st"), true], [tr("后手", "2nd"), false]].map(function (o) {
       return el("div", { class: "opt", onclick: function () { draft.wentFirst = (draft.wentFirst === o[1]) ? null : o[1]; sync(); } }, [o[0]]);
@@ -468,16 +528,25 @@
     ]);
 
     function sync() {
-      resultWrap.innerHTML = "";
-      resultOptions().forEach(function (o) {
-        var selected = !draft.special && draft.result === o[1];
-        var selClass = o[1] === "W" ? " sel-w" : o[1] === "L" ? " sel-l" : " sel";
-        resultWrap.appendChild(el("div", { class: "opt" + (selected ? selClass : ""), onclick: function () {
-          draft.result = o[1]; draft.special = "";
-          if (o[1] !== "L") draft.tags = [];   // loss-reason tags don't make sense off a loss
-          sync();
-        } }, [o[0]]));
-      });
+      if (useGameSequence()) {
+        draft.result = draft.special ? draft.result : deriveBo3Result();
+        buildGamesUI();
+        resultWrap.style.display = "none";
+        gamesWrap.style.display = draft.special ? "none" : "";
+      } else {
+        resultWrap.innerHTML = "";
+        resultOptions().forEach(function (o) {
+          var selected = !draft.special && draft.result === o[1];
+          var selClass = o[1] === "W" ? " sel-w" : " sel-l";
+          resultWrap.appendChild(el("div", { class: "opt" + (selected ? selClass : ""), onclick: function () {
+            draft.result = o[1]; draft.special = "";
+            if (o[1] !== "L") draft.tags = [];   // loss-reason tags don't make sense off a loss
+            sync();
+          } }, [o[0]]));
+        });
+        resultWrap.style.display = "";
+        gamesWrap.style.display = "none";
+      }
 
       if (bestOfSeg) {
         var bo = bestOfSeg.children;
@@ -495,7 +564,16 @@
         tagChips[i].className = "opt" + (draft.tags.indexOf(tag.key) >= 0 ? " sel" : "");
       });
       tagWrap.style.display = (draft.result === "L" && !draft.special) ? "" : "none";
+      // Bo3 sequence can be mid-entry (1-1, no game 3/tie chosen yet) — block
+      // saving an undecided match, same disable pattern as the tournament modal.
+      submitBtn.disabled = !draft.special && useGameSequence() && !draft.result;
     }
+
+    var submitBtn = el("button", { class: "btn btn-primary", onclick: function () {
+      done({ result: draft.result, wentFirst: draft.wentFirst, special: draft.special,
+        opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim(),
+        tags: draft.tags, bestOf: draft.bestOf, games: draft.games });
+    } }, [existing ? tr("保存", "Save") : tr("添加", "Add")]);
     sync();
 
     var roundNum = existing ? existing.number : t.rounds.length + 1;
@@ -507,6 +585,7 @@
       bestOfSeg,
       el("label", { class: "lbl" }, [tr("比赛结果", "Result")]),
       resultWrap,
+      gamesWrap,
       orderSeg,
       el("label", { class: "lbl" }, [tr("其他结果", "Other Outcome")]),
       outcomeSeg,
@@ -516,11 +595,7 @@
         oninput: function () { draft.note = this.value; } }, [draft.note]),
       el("div", { class: "row-actions" }, [
         el("button", { class: "btn btn-ghost", onclick: function () { done(null); } }, [tr("取消", "Cancel")]),
-        el("button", { class: "btn btn-primary", onclick: function () {
-          done({ result: draft.result, wentFirst: draft.wentFirst, special: draft.special,
-            opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim(),
-            tags: draft.tags, bestOf: draft.bestOf });
-        } }, [existing ? tr("保存", "Save") : tr("添加", "Add")])
+        submitBtn
       ])
     ]);
   }
@@ -906,7 +981,7 @@
         // addRound re-assigns number + id so pass stripped round data
         (data.rounds || []).forEach(function (r) {
           S.addRound(t.id, { result: r.result, wentFirst: r.wentFirst, special: r.special,
-            opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf });
+            opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf, games: r.games });
         });
         closeOverlay();
         location.hash = "#/t/" + t.id;
@@ -985,7 +1060,7 @@
           var t = S.addTournament(data);
           (data.rounds || []).forEach(function (r) {
             S.addRound(t.id, { result: r.result, wentFirst: r.wentFirst, special: r.special,
-              opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf });
+              opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf, games: r.games });
           });
         });
         closeOverlay();

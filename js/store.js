@@ -353,6 +353,15 @@
   function _decodeTags(arr) {
     return (arr || []).map(function (i) { return ROUND_TAG_KEYS[i]; }).filter(Boolean);
   }
+  // Per-game Bo3 sequence (English mode only) — 0=W, 1=L per individual
+  // game. Absent/empty on Bo1 and 简中 rounds, and on any code from before
+  // per-game tracking existed.
+  function _encodeGames(games) {
+    return (games || []).map(function (g) { return g === "L" ? 1 : 0; });
+  }
+  function _decodeGames(arr) {
+    return (arr || []).map(function (i) { return i === 1 ? "L" : "W"; });
+  }
 
   function exportTournament(t) {
     var compact = [
@@ -372,7 +381,8 @@
           r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : 0,
           r.note || "",            // index 5, added after round notes existed
           _encodeTags(r.tags),      // index 6, added after loss-reason tags existed
-          r.bestOf || 1             // index 7, added after region mode existed
+          r.bestOf || 1,            // index 7, added after region mode existed
+          _encodeGames(r.games)     // index 8, added after per-game Bo3 tracking existed
         ];
       }),
       _encodeDecklist(t.decklist),  // index 8, added after decklists existed — absent in older codes
@@ -403,7 +413,8 @@
               special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : "",
               note: r[5] || "",
               tags: _decodeTags(r[6]),
-              bestOf: r[7] || 1
+              bestOf: r[7] || 1,
+              games: _decodeGames(r[8])
             };
           }),
           decklist: _decodeDecklist(compact[8]),
@@ -485,7 +496,8 @@
             r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : 0,
             r.note || "",            // index 5, added after round notes existed
             _encodeTags(r.tags),     // index 6, added after loss-reason tags existed
-            r.bestOf || 1            // index 7, added after region mode existed
+            r.bestOf || 1,           // index 7, added after region mode existed
+            _encodeGames(r.games)    // index 8, added after per-game Bo3 tracking existed
           ];
         }),
         _encodeDecklist(t.decklist),  // index 7, added after decklists existed — absent in older codes
@@ -518,7 +530,8 @@
                 special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : "",
                 note: r[5] || "",
                 tags: _decodeTags(r[6]),
-                bestOf: r[7] || 1
+                bestOf: r[7] || 1,
+                games: _decodeGames(r[8])
               };
             }),
             decklist: _decodeDecklist(c[7]),
