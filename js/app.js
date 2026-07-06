@@ -309,7 +309,6 @@
         if (prevBestOf != null && effectiveBestOf !== prevBestOf) {
           var isTopCut = effectiveBestOf === 3;
           rounds.appendChild(el("div", { class: "round-divider" }, [
-            el("span", { class: "round-divider-line" }),
             el("span", { class: "round-divider-label" }, [
               el("strong", {}, [isTopCut ? tr("顶尖战", "Top Cut") : tr("瑞士轮", "Swiss")]),
               el("small", {}, [isTopCut ? "Best of 3" : "Best of 1"])
@@ -480,9 +479,9 @@
     // Each game gets its own result AND its own play order — players re-roll
     // or alternate who goes first between games in a Bo3, so a single
     // round-level 先后手 can't represent it.
-    function gameSeg(gameNum, idx, allowTie) {
-      var options = [["W", "W"], ["L", "L"]];
-      if (allowTie) options.push([tr("平", "T"), "T"]);
+    function gameSeg(gameNum, idx) {
+      // Time can be called during any game, not only game 3.
+      var options = [["W", "W"], ["L", "L"], [tr("平", "T"), "T"]];
       var resSeg = el("div", { class: "seg small game-result-seg" }, options.map(function (o) {
         var selected = draft.games[idx] === o[1];
         var selectedClass = o[1] === "W" ? " sel-w" : o[1] === "L" ? " sel-l" : " sel-t";
@@ -510,28 +509,40 @@
       var l = draft.games.filter(function (g) { return g === "L"; }).length;
       if (w >= 2) return "W";
       if (l >= 2) return "L";
-      if (draft.games.length === 3 && draft.games[2] === "T") return "T";
-      return null;   // incomplete — 1-1 with no game-3 result yet
+      if (draft.games.indexOf("T") >= 0) return w > l ? "W" : l > w ? "L" : "T";
+      return null;
+    }
+    function appendGamesSummary(w, l) {
+      var outcome = deriveBo3Result();
+      var timedOut = draft.games.indexOf("T") >= 0;
+      var text = outcome === "T"
+        ? tr("时间到 · 整场平局", "Time called · Match tie")
+        : outcome === "W"
+          ? (timedOut ? tr("时间到 · 整场获胜 ", "Time called · Match won ") : tr("整场获胜 · ", "Match won · ")) + w + "-" + l
+          : (timedOut ? tr("时间到 · 整场落败 ", "Time called · Match lost ") : tr("整场落败 · ", "Match lost · ")) + w + "-" + l;
+      gamesWrap.appendChild(el("div", { class: "games-summary " +
+        (outcome === "W" ? "win" : outcome === "L" ? "loss" : "tie") }, [text]));
     }
     function buildGamesUI() {
       gamesWrap.innerHTML = "";
-      gamesWrap.appendChild(gameSeg(1, 0, false));
-      if (draft.games.length >= 1) gamesWrap.appendChild(gameSeg(2, 1, false));
+      gamesWrap.appendChild(gameSeg(1, 0));
+      if (draft.games[0] === "T") {
+        appendGamesSummary(0, 0);
+        return;
+      }
+      if (draft.games.length >= 1) gamesWrap.appendChild(gameSeg(2, 1));
       if (draft.games.length >= 2) {
         var w = draft.games.filter(function (g) { return g === "W"; }).length;
         var l = draft.games.filter(function (g) { return g === "L"; }).length;
-        if (draft.games.length === 2 && (w === 2 || l === 2)) {
-          // WW/LL after only 2 games -> decided 2-0, no game 3 needed
-          gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
+        if (draft.games[1] === "T" || w === 2 || l === 2) {
+          // WT/LT resolve 1-0 or 0-1 when time is called in game 2;
+          // WW/LL resolve normally at 2-0.
+          appendGamesSummary(w, l);
         } else {
-          // A 1-1 split always exposes game 3, including an explicit Tie.
-          gamesWrap.appendChild(gameSeg(3, 2, true));
+          // A 1-1 split exposes game 3, where W/L/T are all possible.
+          gamesWrap.appendChild(gameSeg(3, 2));
           if (draft.games.length === 3) {
-            var isTie = draft.games[2] === "T";
-            gamesWrap.appendChild(el("div", { class: "games-summary" + (isTie ? " tie" : "") }, [
-              isTie ? tr("第三局时间到 · 整场平局", "Game 3 timed out · Match tie")
-                    : tr("已定胜负：", "Decided: ") + w + "-" + l
-            ]));
+            appendGamesSummary(w, l);
           }
         }
       }

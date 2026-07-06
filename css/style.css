@@ -203,17 +203,14 @@ img { image-rendering: pixelated; }
 /* ---- rounds list (card rows) ---- */
 .rounds { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
 .round-item { display: flex; flex-direction: column; gap: 4px; }
-/* League Cup phase divider: quiet enough for the list, clear enough that
-   Top Cut never looks like one more Swiss round. */
-.round-divider { display: flex; align-items: center; gap: 10px; margin: 11px 2px 3px; }
+/* League Cup phase divider: a flat section heading, not another floating pill. */
+.round-divider { display: flex; align-items: center; gap: 11px; margin: 15px 4px 4px; }
 .round-divider-line { flex: 1; height: 1px;
-  background: linear-gradient(90deg, transparent, #d7dbea); }
-.round-divider-line:last-child { transform: scaleX(-1); }
-.round-divider-label { min-width: 92px; display: flex; flex-direction: column; align-items: center;
-  gap: 1px; padding: 6px 13px; border: 1px solid #e1e4f0; border-radius: 999px;
-  color: #5e6475; background: rgba(255,255,255,.88); box-shadow: 0 3px 12px rgba(34,40,72,.045); }
-.round-divider-label strong { font-size: 11.5px; line-height: 1.1; letter-spacing: .04em; text-transform: uppercase; }
-.round-divider-label small { color: var(--muted); font-size: 10.5px; line-height: 1.1; }
+  background: linear-gradient(90deg, #d7dbe6, transparent); }
+.round-divider-label { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+.round-divider-label strong { color: #555c6d; font-size: 11.5px; line-height: 1;
+  letter-spacing: .07em; text-transform: uppercase; }
+.round-divider-label small { color: var(--muted); font-size: 11px; line-height: 1; }
 .round-note { font-size: 12.5px; color: var(--muted); line-height: 1.4; padding: 0 14px;
   white-space: pre-wrap; word-break: break-word; }
 .round-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px; }
@@ -337,7 +334,9 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .game-entry { padding: 11px; border: 1px solid #eceef4; border-radius: 14px; background: #f8f9fb; }
 .game-entry .game-entry-label { margin: 0 0 8px; color: #6a7080; font-size: 12px; }
 .games-summary { margin-top: 1px; padding: 8px 11px; border-radius: 11px;
-  background: var(--win-bg); font-size: 12.5px; font-weight: 700; color: var(--win-ink); text-align: center; }
+  font-size: 12.5px; font-weight: 700; text-align: center; }
+.games-summary.win { background: var(--win-bg); color: var(--win-ink); }
+.games-summary.loss { background: var(--loss-bg); color: var(--loss-ink); }
 .games-summary.tie { background: #eef0f5; color: #666c7a; }
 /* each game's W/L seg + its own 1st/2nd seg side by side */
 .game-row { display: flex; gap: 8px; }
