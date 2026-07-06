@@ -63,6 +63,7 @@
       deck: data.deck || [],
       decklist: data.decklist || [],
       region: data.region || "zh",
+      attendance: Math.max(0, parseInt(data.attendance, 10) || 0),
       rounds: []
     };
     list.unshift(t);
@@ -142,14 +143,14 @@
   // ---- Derived ----
   // A round counts as a Win if result==="W" or special is BYE/NO_SHOW.
   // DOUBLE_LOSS (both players out of time, nobody wins — 简中 rule) counts
-  // as a loss, same bucket as a normal L. ID counts as neither. Ties (T,
-  // international Bo3 only) get their own bucket. Returns {w, l, t, label}.
+  // as a loss, same bucket as a normal L. A TCG intentional draw is a tie.
+  // Returns {w, l, t, label}.
   // label stays "W-L" (no "-0" tie suffix) unless a tie has actually
   // happened, so 简中 records render byte-identical to before ties existed.
   function computeRecord(rounds) {
     var w = 0, l = 0, ties = 0;
     (rounds || []).forEach(function (r) {
-      if (r.special === "ID") return;
+      if (r.special === "ID") { ties++; return; }
       if (r.special === "BYE" || r.special === "NO_SHOW") { w++; return; }
       if (r.special === "DOUBLE_LOSS") { l++; return; }
       if (r.result === "W") w++;
@@ -163,13 +164,38 @@
   function roundOutcome(r) {
     if (r.special === "BYE" || r.special === "NO_SHOW") return "W";
     if (r.special === "DOUBLE_LOSS") return "L";
-    if (r.special === "ID") return null;
+    if (r.special === "ID") return "T";
     if (r.result === "W") return "W";
     if (r.result === "L") return "L";
     if (r.result === "T") return "T";
     return null;
   }
   function deckKey(ids) { return (ids || []).slice().sort(function (a, b) { return a - b; }).join("-"); }
+
+  // 2026 Two-Phase Championship Format (Tournament Rules Handbook 5.5.4.2).
+  // Attendance is per age division, not total foot traffic across the event.
+  function championshipStructure(attendance) {
+    var n = Math.max(0, parseInt(attendance, 10) || 0);
+    if (n < 4) return null;
+    if (n <= 8) return { attendance: n, totalSwiss: 3, phaseOne: 3, threshold: null, phaseTwo: 0, topCut: "Natural Swiss" };
+    if (n <= 16) return { attendance: n, totalSwiss: 4, phaseOne: 4, threshold: null, phaseTwo: 0, topCut: "Top 2" };
+    if (n <= 32) return { attendance: n, totalSwiss: 6, phaseOne: 6, threshold: null, phaseTwo: 0, topCut: "Top 4" };
+    if (n <= 64) return { attendance: n, totalSwiss: 7, phaseOne: 7, threshold: null, phaseTwo: 0, topCut: "Top 6" };
+    if (n <= 128) return { attendance: n, totalSwiss: 9, phaseOne: 7, threshold: 13, phaseTwo: 2, topCut: "Top 8" };
+    if (n <= 256) return { attendance: n, totalSwiss: 10, phaseOne: 8, threshold: 16, phaseTwo: 2, topCut: "Top 8" };
+    if (n <= 512) return { attendance: n, totalSwiss: 11, phaseOne: 8, threshold: 16, phaseTwo: 3, topCut: "Top 8" };
+    if (n <= 1024) return { attendance: n, totalSwiss: 12, phaseOne: 8, threshold: 16, phaseTwo: 4, topCut: "Top 8" };
+    if (n <= 2048) return { attendance: n, totalSwiss: 13, phaseOne: 8, threshold: 16, phaseTwo: 5, topCut: "Top 8" };
+    if (n <= 4096) return { attendance: n, totalSwiss: 14, phaseOne: 8, threshold: 16, phaseTwo: 6, topCut: "Top 8" };
+    return { attendance: n, totalSwiss: 15, phaseOne: 9, threshold: 19, phaseTwo: 6, topCut: "Top 8" };
+  }
+
+  function matchPoints(rounds, maxRounds) {
+    return (rounds || []).slice(0, maxRounds == null ? undefined : maxRounds).reduce(function (points, r) {
+      var outcome = roundOutcome(r);
+      return points + (outcome === "W" ? 3 : outcome === "T" ? 1 : 0);
+    }, 0);
+  }
 
   // Aggregate win-rate + per-deck + matchup stats across all tournaments.
   // format: optional — when given, only tournaments with that exact format
@@ -387,7 +413,7 @@
           (r.opponentDeck || [])[1] || 0,
           r.result === "W" ? 0 : r.result === "T" ? 2 : 1,
           r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
-          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : 0,
+          r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : r.special === "ID" ? 4 : 0,
           r.note || "",            // index 5, added after round notes existed
           _encodeTags(r.tags),      // index 6, added after loss-reason tags existed
           r.bestOf || 1,            // index 7, added after region mode existed
@@ -396,7 +422,8 @@
         ];
       }),
       _encodeDecklist(t.decklist),  // index 8, added after decklists existed — absent in older codes
-      t.region || "zh"              // index 9, added after region mode existed
+      t.region || "zh",             // index 9, added after region mode existed
+      t.attendance || 0              // index 10, 2026 phase/cut calculator
     ];
     return _encode(JSON.stringify(compact));   // returns a Promise<string>
   }
@@ -420,7 +447,7 @@
               opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
               result: r[2] === 0 ? "W" : r[2] === 2 ? "T" : "L",
               wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : "",
+              special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : r[4] === 4 ? "ID" : "",
               note: r[5] || "",
               tags: _decodeTags(r[6]),
               bestOf: r[7] || 1,
@@ -429,7 +456,8 @@
             };
           }),
           decklist: _decodeDecklist(compact[8]),
-          region: compact[9] || "zh"
+          region: compact[9] || "zh",
+          attendance: compact[10] || 0
         };
       } catch (e) { return null; }
     }).catch(function () { return null; });   // returns a Promise<data|null>
@@ -504,7 +532,7 @@
             (r.opponentDeck || [])[1] || 0,
             r.result === "W" ? 0 : r.result === "T" ? 2 : 1,
             r.wentFirst === true ? 1 : r.wentFirst === false ? 2 : 0,
-            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : 0,
+            r.special === "BYE" ? 1 : r.special === "NO_SHOW" ? 2 : r.special === "DOUBLE_LOSS" ? 3 : r.special === "ID" ? 4 : 0,
             r.note || "",            // index 5, added after round notes existed
             _encodeTags(r.tags),     // index 6, added after loss-reason tags existed
             r.bestOf || 1,           // index 7, added after region mode existed
@@ -513,7 +541,8 @@
           ];
         }),
         _encodeDecklist(t.decklist),  // index 7, added after decklists existed — absent in older codes
-        t.region || "zh"              // index 8, added after region mode existed
+        t.region || "zh",             // index 8, added after region mode existed
+        t.attendance || 0              // index 9, 2026 phase/cut calculator
       ];
     });
     return _encode(JSON.stringify(["ALL1", bundle]));   // returns a Promise<string>
@@ -539,7 +568,7 @@
                 opponentDeck: [r[0] || null, r[1] || null].filter(Boolean),
                 result: r[2] === 0 ? "W" : r[2] === 2 ? "T" : "L",
                 wentFirst: r[3] === 1 ? true : r[3] === 2 ? false : null,
-                special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : "",
+                special: r[4] === 1 ? "BYE" : r[4] === 2 ? "NO_SHOW" : r[4] === 3 ? "DOUBLE_LOSS" : r[4] === 4 ? "ID" : "",
                 note: r[5] || "",
                 tags: _decodeTags(r[6]),
                 bestOf: r[7] || 1,
@@ -548,7 +577,8 @@
               };
             }),
             decklist: _decodeDecklist(c[7]),
-            region: c[8] || "zh"
+            region: c[8] || "zh",
+            attendance: c[9] || 0
           };
         });
       } catch (e) { return null; }
@@ -562,6 +592,7 @@
     addRound: addRound, deleteRound: deleteRound, updateRound: updateRound,
     loadLogs: loadLogs, addLog: addLog, deleteLog: deleteLog,
     computeRecord: computeRecord, computeStats: computeStats,
+    championshipStructure: championshipStructure, matchPoints: matchPoints,
     frequentPokemonIds: frequentPokemonIds,
     exportTournament: exportTournament, importTournament: importTournament,
     exportAllTournaments: exportAllTournaments, importAllTournaments: importAllTournaments,

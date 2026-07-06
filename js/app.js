@@ -36,8 +36,8 @@
 
   // Best-of rule per English-mode category. League Cup runs Bo1 Swiss then
   // Bo3 top cut once the field is small enough (Top 16/8/4, depending on
-  // attendance) — the app doesn't track attendance, so that switch is a
-  // manual per-round toggle in roundForm (see BEST_OF_RULES[...] === "manual").
+  // attendance) — keep that switch manual per round rather than applying the
+  // separate Regional/International Championship structure table.
   var BEST_OF_RULES = {
     "Local Tournament": 1,
     "League Challenge": 1,
@@ -46,9 +46,13 @@
     "International Championships": 3,
     "World Championships": 3
   };
+  function usesChampionshipPhases(category) {
+    return ["Regional Championships", "International Championships", "World Championships"].indexOf(category) >= 0;
+  }
 
   // result / outcome display helpers
   function resLabel(r) {
+    if (r.special === "ID") return "T";
     if (r.special === "BYE" || r.special === "NO_SHOW") return tr("胜", "W");
     if (r.special === "DOUBLE_LOSS") return tr("双败", "DL");
     // New records store a time-called third game as a real T (WLT). Older
@@ -60,11 +64,13 @@
     return r.result === "W" ? tr("胜", "W") : r.result === "L" ? tr("负", "L") : "";
   }
   function rowClass(r) {
+    if (r.special === "ID") return "tie";
     if (r.result === "W" || r.special === "BYE" || r.special === "NO_SHOW") return "win";
     if (r.result === "L" || r.special === "DOUBLE_LOSS") return "loss";
     return "tie";
   }
   function specialText(s) {
+    if (s === "ID") return tr("约平", "Intentional draw");
     if (s === "BYE") return tr("轮空", "Bye");
     if (s === "NO_SHOW") return tr("对手弃赛", "No-show");
     if (s === "DOUBLE_LOSS") return tr("双败（超时未分胜负）", "Double loss (time)");
@@ -191,13 +197,14 @@
       format: editing ? existing.format : "",
       placement: editing ? existing.placement : "",
       region: editing ? existing.region : getRegion(),
+      attendance: editing ? (existing.attendance || 0) : 0,
       deck: []
     };
     var deckPicks = [(existing && existing.deck[0]) || null, (existing && existing.deck[1]) || null];
 
     var nameI = el("input", { class: "input", placeholder: tr("锦标赛名称", "Tournament name"), value: draft.name, oninput: function () { draft.name = this.value; refreshBtn(); } });
     var dateI = el("input", { class: "input", type: "date", value: draft.date, oninput: function () { draft.date = this.value; } });
-    var catI = el("select", { class: "select", onchange: function () { draft.category = this.value; } },
+    var catI = el("select", { class: "select", onchange: function () { draft.category = this.value; refreshAttendance(); } },
       [el("option", { value: "" }, [tr("选择赛事分类", "Choose a category")])].concat(CATEGORIES().map(function (c) {
         return el("option", { value: c, selected: draft.category === c ? "selected" : null }, [c]);
       })));
@@ -206,6 +213,32 @@
       [el("option", { value: "" }, [tr("名次（可选）", "Placement (optional)")])].concat(PLACEMENTS().slice(1).map(function (p) {
         return el("option", { value: p, selected: draft.placement === p ? "selected" : null }, [p]);
       })));
+
+    var attendancePreview = el("div", { class: "structure-preview" });
+    var attendanceI = el("input", { class: "input", type: "number", min: "4", step: "1",
+      placeholder: tr("例如：2000", "e.g. 2000"), value: draft.attendance || "",
+      oninput: function () { draft.attendance = Math.max(0, parseInt(this.value, 10) || 0); refreshAttendance(); } });
+    var attendanceWrap = el("div", { class: "attendance-field" }, [
+      el("label", { class: "lbl" }, [tr("本年龄组参赛人数（可先估算）", "Players in your age division (estimate is fine)")]),
+      attendanceI,
+      el("div", { class: "field-help" }, [tr(
+        "以开赛前主办方公布的轮数为准；报名人数可能因未签到而变化。",
+        "The organizer's pre-round announcement is final; registrations may differ from checked-in attendance."
+      )]),
+      attendancePreview
+    ]);
+    function refreshAttendance() {
+      var show = getRegion() === "en" && usesChampionshipPhases(draft.category);
+      attendanceWrap.style.display = show ? "" : "none";
+      attendancePreview.innerHTML = "";
+      if (!show || !draft.attendance) return;
+      var structure = S.championshipStructure(draft.attendance);
+      if (!structure) return;
+      attendancePreview.textContent = structure.phaseTwo
+        ? structure.phaseOne + " Phase 1 + " + structure.phaseTwo + " Phase 2 = " + structure.totalSwiss +
+          " Swiss · " + structure.threshold + " pts to advance"
+        : structure.totalSwiss + " Swiss rounds · single phase";
+    }
 
     var deckRow = el("div", { class: "two-col" }, [
       UI.PokemonPicker({ value: deckPicks[0], onChange: function (id) { deckPicks[0] = id; } }),
@@ -217,6 +250,7 @@
 
     function submit() {
       draft.deck = deckPicks.filter(Boolean);
+      draft.attendance = Math.max(0, parseInt(draft.attendance, 10) || 0);
       if (editing) {
         S.updateTournament(existing.id, draft);
         closeOverlay();
@@ -235,6 +269,7 @@
       el("label", { class: "lbl" }, [tr("比赛日期", "Date")]),
       el("div", { class: "field" }, [dateI]),
       el("div", { class: "field" }, [catI]),
+      attendanceWrap,
       el("div", { class: "field" }, [fmtI]),
       el("div", { class: "field" }, [placeI]),
       el("label", { class: "lbl" }, [tr("我的卡组", "My Deck")]),
@@ -244,7 +279,96 @@
         saveBtn
       ])
     ]);
+    refreshAttendance();
     showOverlay(modal);
+  }
+
+  function qualificationCard(t, onEdit) {
+    if (getRegion() !== "en" || !usesChampionshipPhases(t.category)) return null;
+    var structure = S.championshipStructure(t.attendance);
+    if (!structure) {
+      return el("button", { class: "qualification-card qualification-setup", onclick: onEdit }, [
+        el("span", { class: "qualification-kicker" }, ["EVENT STRUCTURE"]),
+        el("strong", {}, ["Add division attendance"]),
+        el("small", {}, ["Estimate now, then update it from the organizer's announcement before Round 1."]),
+        el("span", { class: "qualification-arrow" }, ["›"])
+      ]);
+    }
+
+    if (!structure.threshold) {
+      return el("div", { class: "qualification-card" }, [
+        el("div", { class: "qualification-top" }, [
+          el("span", { class: "qualification-kicker" }, ["EVENT STRUCTURE"]),
+          el("button", { class: "qualification-edit", onclick: onEdit }, ["Edit"])
+        ]),
+        el("div", { class: "qualification-structure-only" }, [
+          el("strong", {}, [structure.totalSwiss + " Swiss rounds"]),
+          el("span", {}, ["Single phase · " + structure.topCut])
+        ])
+      ]);
+    }
+
+    var phaseRounds = (t.rounds || []).slice(0, structure.phaseOne);
+    var played = phaseRounds.length;
+    var remaining = Math.max(0, structure.phaseOne - played);
+    var points = S.matchPoints(phaseRounds);
+    var threshold = structure.threshold;
+    var locked = points >= threshold;
+    var alive = points + remaining * 3 >= threshold;
+    var need = Math.max(0, threshold - points);
+    var statusText;
+    var statusClass;
+    if (locked) {
+      statusText = "DAY 2 LOCKED"; statusClass = "locked";
+    } else if (!alive || remaining === 0) {
+      statusText = "PHASE 2 MISSED"; statusClass = "out";
+    } else if (remaining === 1 && need <= 1) {
+      statusText = "ID / TIE AND IN"; statusClass = "live";
+    } else if (remaining === 1 && need <= 3) {
+      statusText = "WIN AND IN"; statusClass = "live";
+    } else {
+      statusText = "NEED " + need + " PTS FROM " + remaining + " ROUNDS"; statusClass = "live";
+    }
+
+    var children = [
+      el("div", { class: "qualification-top" }, [
+        el("span", { class: "qualification-kicker" }, ["DAY 2 QUALIFICATION"]),
+        el("button", { class: "qualification-edit", onclick: onEdit }, ["Edit"])
+      ]),
+      el("div", { class: "qualification-main" }, [
+        el("div", { class: "qualification-points" }, [
+          el("strong", {}, [String(points)]),
+          el("span", {}, ["/ " + threshold + " pts"])
+        ]),
+        el("span", { class: "qualification-status " + statusClass }, [statusText])
+      ]),
+      el("div", { class: "qualification-progress" }, [
+        el("i", { style: "width:" + Math.min(100, Math.round(points / threshold * 100)) + "%" })
+      ]),
+      el("div", { class: "qualification-meta" }, [
+        el("span", {}, ["Phase 1 · Round " + played + " of " + structure.phaseOne]),
+        el("span", {}, [structure.phaseTwo + " Day 2 rounds · " + structure.totalSwiss + " Swiss total"])
+      ])
+    ];
+
+    if (remaining > 0) {
+      var futureRounds = remaining - 1;
+      function scenario(label, add) {
+        var projected = points + add;
+        var state = projected >= threshold ? "IN" : projected + futureRounds * 3 < threshold ? "OUT" : "LIVE";
+        return el("div", { class: "qualification-scenario " + state.toLowerCase() }, [
+          el("span", {}, [label]), el("strong", {}, [projected + " · " + state])
+        ]);
+      }
+      children.push(el("div", { class: "qualification-scenarios" }, [
+        scenario("Win", 3), scenario("Tie / ID", 1), scenario("Loss", 0)
+      ]));
+    }
+
+    children.push(el("div", { class: "qualification-footnote" }, [
+      Number(t.attendance).toLocaleString("en-US") + " players in division · Organizer announcement overrides estimates"
+    ]));
+    return el("div", { class: "qualification-card" }, children);
   }
 
   // ---------------------------------------------------------------- DETAIL
@@ -292,9 +416,29 @@
     ]);
     main.appendChild(chips);
 
+    var qualificationSlot = el("div", {});
+    function refreshQualification() {
+      qualificationSlot.innerHTML = "";
+      var card = qualificationCard(t, function () { openTournamentModal(t); });
+      if (card) qualificationSlot.appendChild(card);
+    }
+    refreshQualification();
+    main.appendChild(qualificationSlot);
+
     // rounds (card rows) — each has an edit pencil that swaps the row for an inline form
     var editingRid = null;
     var rounds = el("div", { class: "rounds" });
+    var championshipStructure = getRegion() === "en" && usesChampionshipPhases(t.category)
+      ? S.championshipStructure(t.attendance) : null;
+
+    function appendRoundDivider(label, detail) {
+      rounds.appendChild(el("div", { class: "round-divider" }, [
+        el("span", { class: "round-divider-label" }, [
+          el("strong", {}, [label]), el("small", {}, [detail])
+        ]),
+        el("span", { class: "round-divider-line" })
+      ]));
+    }
 
     function renderRounds() {
       rounds.innerHTML = "";
@@ -302,7 +446,15 @@
       // same tournament — mark the phase change so the list doesn't read as
       // one undifferentiated block once bestOf actually changes.
       var prevBestOf = null;
-      t.rounds.forEach(function (r) {
+      t.rounds.forEach(function (r, roundIndex) {
+        var roundNumber = r.number || roundIndex + 1;
+        if (championshipStructure && championshipStructure.phaseTwo && roundNumber === championshipStructure.phaseOne + 1) {
+          appendRoundDivider("Swiss Phase 2", "Day 2");
+        }
+        if (championshipStructure && roundNumber === championshipStructure.totalSwiss + 1) {
+          appendRoundDivider("Top Cut", (t.category === "International Championships" || t.category === "World Championships")
+            ? "Championship Sunday" : "Best of 3");
+        }
         // Legacy League Cup rounds predate bestOf and are Swiss/Bo1. Treat
         // them as Bo1 so the first saved Top Cut round still gets a divider.
         var effectiveBestOf = r.bestOf || 1;
@@ -325,6 +477,7 @@
             editingRid = null;
             renderRounds();
             refreshBigRec();
+            refreshQualification();
           }));
           return;
         }
@@ -351,6 +504,7 @@
               if (!confirm(tr("确定删除第 " + r.number + " 轮？", "Delete round " + r.number + "?"))) return;
               S.deleteRound(id, r.id); t = S.getTournament(id); renderRounds();
               refreshBigRec();
+              refreshQualification();
             } })
         ]);
         var extras = [];
@@ -391,7 +545,7 @@
     main.appendChild(el("button", { class: "add-round-btn", onclick: function () {
       addArea.innerHTML = "";
       addArea.appendChild(roundForm(t, null, function (patch) {
-        if (patch) { S.addRound(id, patch); t = S.getTournament(id); renderRounds(); refreshBigRec(); }
+        if (patch) { S.addRound(id, patch); t = S.getTournament(id); renderRounds(); refreshBigRec(); refreshQualification(); }
         addArea.innerHTML = "";
       }));
       addArea.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -447,6 +601,7 @@
       draft.games.push("T");
       draft.gameOrders.push(null);
     }
+    if (draft.special === "ID") draft.result = "T";
 
     // ---- Bo1/Bo3 toggle (League Cup / no category chosen yet, English mode only) ----
     var bestOfSeg = null;
@@ -472,8 +627,7 @@
 
     // ---- Bo3 per-game sequence (English mode, Bo3 rounds only) ----
     // A Bo3 match is decided in 2 games (WW/LL) or 3 (WLW/WLL/LWW/LWL).
-    // If time is called in game 3 after a 1-1 split, that game is recorded as
-    // a real T, producing WLT/LWT and an overall match tie.
+    // Time can be called in any game, so T/WT/LT/WLT/LWT are stored explicitly.
     var gamesWrap = el("div", { class: "bo3-games" });
     function useGameSequence() { return isEn && draft.bestOf === 3; }
     // Each game gets its own result AND its own play order — players re-roll
@@ -555,13 +709,19 @@
     }));
     // Outcome options: 简中 gets 轮空/对手弃赛/双败 (双败 = both players still
     // tied when time ran out — counts as a loss, see store.js computeRecord).
-    // English mode gets Bye/No-show only (双败 is a 简中-specific ruling).
+    // English mode also exposes a TCG Intentional Draw, which scores as a tie.
     var outcomeOptions = isEn
-      ? [["Bye", "BYE"], ["No-show", "NO_SHOW"]]
+      ? [["Bye", "BYE"], ["No-show", "NO_SHOW"], ["ID (Draw)", "ID"]]
       : [["轮空", "BYE"], ["对手弃赛", "NO_SHOW"], ["双败", "DOUBLE_LOSS"]];
     var outcomeSeg = el("div", { class: "seg small" }, outcomeOptions.map(function (o) {
       return el("div", { class: "opt", onclick: function () {
         draft.special = draft.special === o[1] ? "" : o[1];
+        if (draft.special === "ID") {
+          draft.result = "T";
+          draft.games = [];
+          draft.gameOrders = [];
+          draft.wentFirst = null;
+        }
         if (draft.special) draft.tags = [];   // any special outcome isn't a plain loss
         sync();
       } }, [o[0]]);
@@ -620,8 +780,9 @@
       // In Bo3 sequence mode each game carries its own 先后手, so the
       // round-level Play Order picker is redundant — hide it (label too).
       var seqMode = useGameSequence() && !draft.special;
-      orderLbl.style.display = seqMode ? "none" : "";
-      orderSeg.style.display = seqMode ? "none" : "";
+      var hideOrder = seqMode || !!draft.special;
+      orderLbl.style.display = hideOrder ? "none" : "";
+      orderSeg.style.display = hideOrder ? "none" : "";
       LOSS_TAGS.forEach(function (tag, i) {
         tagChips[i].className = "opt" + (draft.tags.indexOf(tag.key) >= 0 ? " sel" : "");
       });
@@ -640,9 +801,9 @@
       done({ result: draft.result,
         // Bo3 rounds: round-level wentFirst = game 1's order, so the
         // existing first/second stats keep working on the match anchor.
-        wentFirst: seq ? (orders.length ? orders[0] : null) : draft.wentFirst,
+        wentFirst: draft.special ? null : seq ? (orders.length ? orders[0] : null) : draft.wentFirst,
         special: draft.special,
-        opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim(),
+        opponentDeck: draft.special && draft.special !== "ID" ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim(),
         tags: draft.tags, bestOf: draft.bestOf,
         games: seq ? draft.games : [], gameOrders: orders });
     } }, [existing ? tr("保存", "Save") : tr("添加", "Add")]);
