@@ -326,6 +326,9 @@ label.lbl { font-size: 13.5px; color: #5b6172; font-weight: 600; display: block;
 .tag-seg .opt { flex: 0 0 auto; padding: 9px 13px; font-size: 13px; }
 /* Bo3 per-game sequence — decided/tied summary line under the game rows */
 .games-summary { margin-top: 6px; font-size: 13.5px; font-weight: 700; color: var(--muted); }
+/* each game's W/L seg + its own 1st/2nd seg side by side */
+.game-row { display: flex; gap: 8px; }
+.game-row .seg { flex: 1; }
 
 /* ---- pokemon picker — trigger box ---- */
 .picker { flex: 1; }

@@ -362,6 +362,15 @@
   function _decodeGames(arr) {
     return (arr || []).map(function (i) { return i === 1 ? "L" : "W"; });
   }
+  // Per-game play order, parallel to the games array — 0=unrecorded,
+  // 1=went first, 2=went second (same 1/2 convention as the round-level
+  // wentFirst slot).
+  function _encodeGameOrders(orders) {
+    return (orders || []).map(function (o) { return o === true ? 1 : o === false ? 2 : 0; });
+  }
+  function _decodeGameOrders(arr) {
+    return (arr || []).map(function (i) { return i === 1 ? true : i === 2 ? false : null; });
+  }
 
   function exportTournament(t) {
     var compact = [
@@ -382,7 +391,8 @@
           r.note || "",            // index 5, added after round notes existed
           _encodeTags(r.tags),      // index 6, added after loss-reason tags existed
           r.bestOf || 1,            // index 7, added after region mode existed
-          _encodeGames(r.games)     // index 8, added after per-game Bo3 tracking existed
+          _encodeGames(r.games),    // index 8, added after per-game Bo3 tracking existed
+          _encodeGameOrders(r.gameOrders)  // index 9, per-game 先后手
         ];
       }),
       _encodeDecklist(t.decklist),  // index 8, added after decklists existed — absent in older codes
@@ -414,7 +424,8 @@
               note: r[5] || "",
               tags: _decodeTags(r[6]),
               bestOf: r[7] || 1,
-              games: _decodeGames(r[8])
+              games: _decodeGames(r[8]),
+              gameOrders: _decodeGameOrders(r[9])
             };
           }),
           decklist: _decodeDecklist(compact[8]),
@@ -497,7 +508,8 @@
             r.note || "",            // index 5, added after round notes existed
             _encodeTags(r.tags),     // index 6, added after loss-reason tags existed
             r.bestOf || 1,           // index 7, added after region mode existed
-            _encodeGames(r.games)    // index 8, added after per-game Bo3 tracking existed
+            _encodeGames(r.games),   // index 8, added after per-game Bo3 tracking existed
+            _encodeGameOrders(r.gameOrders)  // index 9, per-game 先后手
           ];
         }),
         _encodeDecklist(t.decklist),  // index 7, added after decklists existed — absent in older codes
@@ -531,7 +543,8 @@
                 note: r[5] || "",
                 tags: _decodeTags(r[6]),
                 bestOf: r[7] || 1,
-                games: _decodeGames(r[8])
+                games: _decodeGames(r[8]),
+                gameOrders: _decodeGameOrders(r[9])
               };
             }),
             decklist: _decodeDecklist(c[7]),

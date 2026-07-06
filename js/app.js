@@ -51,6 +51,10 @@
   function resLabel(r) {
     if (r.special === "BYE" || r.special === "NO_SHOW") return tr("胜", "W");
     if (r.special === "DOUBLE_LOSS") return tr("双败", "DL");
+    // Bo3 rounds show the game sequence itself — "WW", "WLW", and a
+    // time-called tie after 1-1 reads "WLT" (the T is the unplayed/timed-out
+    // game 3, not a stored game).
+    if (r.games && r.games.length) return r.games.join("") + (r.result === "T" ? "T" : "");
     if (r.result === "T") return tr("平", "T");
     return r.result === "W" ? tr("胜", "W") : r.result === "L" ? tr("负", "L") : "";
   }
@@ -318,16 +322,18 @@
         var opp = r.special
           ? el("div", { class: "opp" }, [el("span", { class: "opp-text" }, [specialText(r.special)])])
           : el("div", { class: "opp" }, (r.opponentDeck || []).map(function (pid) { return sprite(pid); }));
-        var orderBadge = r.wentFirst === true  ? el("span", { class: "order-badge" }, [tr("先", "1st")])
+        // Bo3 rounds carry per-game orders (shown in the detail line below),
+        // so the single round-level badge would be misleading there.
+        var hasGames = r.games && r.games.length;
+        var orderBadge = hasGames ? null
+                       : r.wentFirst === true  ? el("span", { class: "order-badge" }, [tr("先", "1st")])
                        : r.wentFirst === false ? el("span", { class: "order-badge" }, [tr("后", "2nd")])
                        : null;
         var roundRow = el("div", { class: "round-row " + rowClass(r) }, [
           el("div", { class: "rnum" }, [String(r.number)]),
           opp,
           orderBadge,
-          el("div", { class: "res" }, [resLabel(r) + (r.games && r.games.length ? " " +
-            r.games.filter(function (g) { return g === "W"; }).length + "-" +
-            r.games.filter(function (g) { return g === "L"; }).length : "")]),
+          el("div", { class: "res" }, [resLabel(r)]),
           el("div", { class: "edit", title: tr("编辑该轮", "Edit this round"),
             onclick: function () { editingRid = r.id; renderRounds(); } },
             [el("img", { src: "assets/icon-edit.svg", alt: tr("编辑", "Edit") })]),
@@ -339,12 +345,16 @@
             } })
         ]);
         var extras = [];
-        if (r.games && r.games.length) {
-          var w = r.games.filter(function (g) { return g === "W"; }).length;
-          var l = r.games.filter(function (g) { return g === "L"; }).length;
-          extras.push(el("div", { class: "round-note" }, [
-            tr("每局：", "Games: ") + r.games.join(" · ") + " (" + w + "-" + l + ")"
-          ]));
+        if (hasGames) {
+          // per-game breakdown incl. each game's 先后手 when recorded,
+          // e.g. "G1 W·先 / G2 L·后 / G3 W·先" (order omitted where unset)
+          var parts = r.games.map(function (g, i) {
+            var o = r.gameOrders && r.gameOrders[i];
+            var oTxt = o === true ? tr("先", "1st") : o === false ? tr("后", "2nd") : null;
+            return "G" + (i + 1) + " " + g + (oTxt ? "·" + oTxt : "");
+          });
+          if (r.result === "T") parts.push(tr("超时平局", "T (time)"));
+          extras.push(el("div", { class: "round-note" }, [parts.join("  /  ")]));
         }
         if (r.tags && r.tags.length) {
           extras.push(el("div", { class: "round-tags" }, r.tags.map(function (key) {
@@ -418,9 +428,10 @@
           special: existing.special || "", note: existing.note || "", tags: (existing.tags || []).slice(),
           bestOf: existing.bestOf || fixedBestOf,
           games: (existing.games || []).slice(),
+          gameOrders: (existing.gameOrders || []).slice(),
           tied: existing.result === "T" && (existing.games || []).length === 2 }
       : { opponentDeck: [null, null], result: "W", wentFirst: null, special: "", note: "", tags: [],
-          bestOf: fixedBestOf, games: [], tied: false };
+          bestOf: fixedBestOf, games: [], gameOrders: [], tied: false };
 
     // ---- Bo1/Bo3 toggle (League Cup / no category chosen yet, English mode only) ----
     var bestOfSeg = null;
@@ -428,7 +439,7 @@
       bestOfSeg = el("div", { class: "seg small" }, [[1, "Swiss (Bo1)"], [3, "Top Cut (Bo3)"]].map(function (o) {
         return el("div", { class: "opt", onclick: function () {
           draft.bestOf = o[0];
-          draft.games = []; draft.tied = false;   // switching best-of starts the sequence over
+          draft.games = []; draft.gameOrders = []; draft.tied = false;   // switching best-of starts the sequence over
           if (draft.bestOf === 1 && draft.result === "T") draft.result = "W";
           sync();
         } }, [o[1]]);
@@ -450,17 +461,31 @@
     // round clock runs out before it's played — ends as a tie at 1-1.
     var gamesWrap = el("div", {});
     function useGameSequence() { return isEn && draft.bestOf === 3; }
+    // Each game gets its own result AND its own play order — players re-roll
+    // or alternate who goes first between games in a Bo3, so a single
+    // round-level 先后手 can't represent it.
     function gameSeg(gameNum, idx) {
-      var seg = el("div", { class: "seg small" }, [["W", "W"], ["L", "L"]].map(function (o) {
+      var resSeg = el("div", { class: "seg small" }, [["W", "W"], ["L", "L"]].map(function (o) {
         var selected = draft.games[idx] === o[1];
         return el("div", { class: "opt" + (selected ? (o[1] === "W" ? " sel-w" : " sel-l") : ""), onclick: function () {
           draft.games = draft.games.slice(0, idx).concat([o[1]]);
+          draft.gameOrders = draft.gameOrders.slice(0, idx + 1);   // later games restart, their orders too
           draft.tied = false;
           draft.special = "";
           sync();
         } }, [o[0]]);
       }));
-      return el("div", {}, [el("label", { class: "lbl" }, [tr("第 " + gameNum + " 局", "Game " + gameNum)]), seg]);
+      var ordSeg = el("div", { class: "seg small" }, [[tr("先", "1st"), true], [tr("后", "2nd"), false]].map(function (o) {
+        var selected = draft.gameOrders[idx] === o[1];
+        return el("div", { class: "opt" + (selected ? " sel" : ""), onclick: function () {
+          draft.gameOrders[idx] = (draft.gameOrders[idx] === o[1]) ? null : o[1];
+          sync();
+        } }, [o[0]]);
+      }));
+      return el("div", {}, [
+        el("label", { class: "lbl" }, [tr("第 " + gameNum + " 局", "Game " + gameNum)]),
+        el("div", { class: "game-row" }, [resSeg, ordSeg])
+      ]);
     }
     function deriveBo3Result() {
       var w = draft.games.filter(function (g) { return g === "W"; }).length;
@@ -477,10 +502,7 @@
       if (draft.games.length >= 2) {
         var w = draft.games.filter(function (g) { return g === "W"; }).length;
         var l = draft.games.filter(function (g) { return g === "L"; }).length;
-        if (draft.games.length === 3) {
-          // game 3 played -> always decided, 2-1 either way
-          gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
-        } else if (w === 2 || l === 2) {
+        if (draft.games.length === 2 && (w === 2 || l === 2)) {
           // WW/LL after only 2 games -> decided 2-0, no game 3 needed
           gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
         } else if (draft.tied) {
@@ -488,13 +510,21 @@
           gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = false; sync(); } },
             [tr("改为打第三局", "Play Game 3 instead")]));
         } else {
+          // 1-1 split: game 3 row appears — and STAYS once filled, so its
+          // result and play order remain visible/editable (an earlier version
+          // swapped the row out for just the summary, orphaning game 3's order).
           gamesWrap.appendChild(gameSeg(3, 2));
-          gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = true; sync(); } },
-            [tr("时间到，判平局", "Time called — mark as tie")]));
+          if (draft.games.length === 3) {
+            gamesWrap.appendChild(el("div", { class: "games-summary" }, [tr("已定胜负：", "Decided: ") + w + "-" + l]));
+          } else {
+            gamesWrap.appendChild(el("button", { class: "btn btn-ghost", style: "margin-top:8px;width:100%", onclick: function () { draft.tied = true; sync(); } },
+              [tr("时间到，判平局", "Time called — mark as tie")]));
+          }
         }
       }
     }
 
+    var orderLbl = el("label", { class: "lbl" }, [tr("先后手", "Play Order")]);
     var orderSeg = el("div", { class: "seg small" }, [[tr("先手", "1st"), true], [tr("后手", "2nd"), false]].map(function (o) {
       return el("div", { class: "opt", onclick: function () { draft.wentFirst = (draft.wentFirst === o[1]) ? null : o[1]; sync(); } }, [o[0]]);
     }));
@@ -562,6 +592,11 @@
       var ord = orderSeg.children;
       ord[0].className = "opt" + (draft.wentFirst === true ? " sel" : "");
       ord[1].className = "opt" + (draft.wentFirst === false ? " sel" : "");
+      // In Bo3 sequence mode each game carries its own 先后手, so the
+      // round-level Play Order picker is redundant — hide it (label too).
+      var seqMode = useGameSequence() && !draft.special;
+      orderLbl.style.display = seqMode ? "none" : "";
+      orderSeg.style.display = seqMode ? "none" : "";
       LOSS_TAGS.forEach(function (tag, i) {
         tagChips[i].className = "opt" + (draft.tags.indexOf(tag.key) >= 0 ? " sel" : "");
       });
@@ -572,9 +607,19 @@
     }
 
     var submitBtn = el("button", { class: "btn btn-primary", onclick: function () {
-      done({ result: draft.result, wentFirst: draft.wentFirst, special: draft.special,
+      var seq = useGameSequence() && !draft.special;
+      // normalize per-game orders to games length (true/false/null per game)
+      var orders = seq ? draft.games.map(function (g, i) {
+        return draft.gameOrders[i] === true ? true : draft.gameOrders[i] === false ? false : null;
+      }) : [];
+      done({ result: draft.result,
+        // Bo3 rounds: round-level wentFirst = game 1's order, so the
+        // existing first/second stats keep working on the match anchor.
+        wentFirst: seq ? (orders.length ? orders[0] : null) : draft.wentFirst,
+        special: draft.special,
         opponentDeck: draft.special ? [] : draft.opponentDeck.filter(Boolean), note: draft.note.trim(),
-        tags: draft.tags, bestOf: draft.bestOf, games: draft.games });
+        tags: draft.tags, bestOf: draft.bestOf,
+        games: seq ? draft.games : [], gameOrders: orders });
     } }, [existing ? tr("保存", "Save") : tr("添加", "Add")]);
     sync();
 
@@ -588,7 +633,7 @@
       el("label", { class: "lbl" }, [tr("比赛结果", "Result")]),
       resultWrap,
       gamesWrap,
-      el("label", { class: "lbl" }, [tr("先后手", "Play Order")]),
+      orderLbl,
       orderSeg,
       el("label", { class: "lbl" }, [tr("其他结果", "Other Outcome")]),
       outcomeSeg,
@@ -984,7 +1029,7 @@
         // addRound re-assigns number + id so pass stripped round data
         (data.rounds || []).forEach(function (r) {
           S.addRound(t.id, { result: r.result, wentFirst: r.wentFirst, special: r.special,
-            opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf, games: r.games });
+            opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf, games: r.games, gameOrders: r.gameOrders });
         });
         closeOverlay();
         location.hash = "#/t/" + t.id;
@@ -1063,7 +1108,7 @@
           var t = S.addTournament(data);
           (data.rounds || []).forEach(function (r) {
             S.addRound(t.id, { result: r.result, wentFirst: r.wentFirst, special: r.special,
-              opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf, games: r.games });
+              opponentDeck: r.opponentDeck, note: r.note, tags: r.tags, bestOf: r.bestOf, games: r.games, gameOrders: r.gameOrders });
           });
         });
         closeOverlay();
